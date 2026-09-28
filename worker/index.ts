@@ -4,7 +4,14 @@
  */
 import "dotenv/config";
 import { prisma } from "@/lib/db";
-import { getBoss, type ProcessImagePayload, QUEUES, type RenderPayload } from "@/lib/queue";
+import {
+  type ExportPayload,
+  getBoss,
+  type ProcessImagePayload,
+  QUEUES,
+  type RenderPayload,
+} from "@/lib/queue";
+import { exportJob } from "./jobs/export";
 import { processImageJob } from "./jobs/process-image";
 import { renderJob } from "./jobs/render";
 
@@ -24,6 +31,12 @@ async function main() {
     QUEUES.render,
     { localConcurrency: concurrency, ...polling },
     async ([job]) => renderJob(job),
+  );
+  // Exports are long-running; keep them to one at a time per worker.
+  await boss.work<ExportPayload>(
+    QUEUES.export,
+    { localConcurrency: 1, ...polling },
+    async ([job]) => exportJob(job),
   );
 
   console.info(`[worker] started (concurrency ${concurrency})`);

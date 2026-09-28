@@ -27,6 +27,7 @@ model User {
   auditEvents   AuditEvent[]
   images        Image[]      @relation("uploader")
   boards        Board[]
+  exports       Export[]
 
   @@unique([email])
   @@map("user")
@@ -94,6 +95,7 @@ model Organization {
   images      Image[]
   boards      Board[]
   presets     ResizePreset[]
+  exports     Export[]
 
   @@unique([slug])
   @@map("organization")
@@ -296,4 +298,38 @@ model ResizePreset {
 
   @@index([orgId, position])
   @@map("resize_preset")
+}
+
+enum ExportStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+}
+
+/// A generated download (ZIP of images, or contact-sheet PDF), built by the worker.
+model Export {
+  id          String       @id @default(uuid(7))
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// zip | pdf
+  kind        String
+  status      ExportStatus @default(PENDING)
+  /// What to include and how (see src/lib/exports.ts)
+  params      Json
+  filename    String
+  itemCount   Int          @default(0)
+  progress    Int          @default(0)
+  storageKey  String?
+  bytes       BigInt?
+  error       String?
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("export")
 }

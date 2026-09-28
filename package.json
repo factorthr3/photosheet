@@ -30,6 +30,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1142.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "archiver": "^8.0.0",
     "better-auth": "^1.7.6",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
@@ -55,6 +56,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^8.0.0",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",

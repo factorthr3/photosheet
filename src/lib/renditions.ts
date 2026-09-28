@@ -1,14 +1,14 @@
 import "server-only";
-import type { Prisma, Rendition } from "@/generated/prisma/client";
+import type { Rendition } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import {
   canonicalParams,
-  paramsHash,
   type RenderParams,
   type RenderParamsInput,
   renditionFilename,
 } from "@/lib/image/render-params";
 import { enqueueRender } from "@/lib/queue";
+import { upsertRendition } from "@/lib/renditions-core";
 import { presignGet } from "@/lib/storage";
 
 /** A render stuck in PENDING this long (e.g. the job was lost) is re-queued on the next request. */
@@ -19,18 +19,7 @@ const STALE_PENDING_MS = 2 * 60_000;
  * Identical requests share one row thanks to the (imageId, paramsHash) unique index.
  */
 export async function getOrCreateRendition(imageId: string, input: RenderParamsInput) {
-  const params = canonicalParams(input);
-  const hash = await paramsHash(params);
-  let rendition = await prisma.rendition.upsert({
-    where: { imageId_paramsHash: { imageId, paramsHash: hash } },
-    create: {
-      imageId,
-      paramsHash: hash,
-      params: params as unknown as Prisma.InputJsonValue,
-      format: params.format,
-    },
-    update: {},
-  });
+  let rendition = await upsertRendition(imageId, canonicalParams(input));
 
   const stale =
     rendition.status === "PENDING" && Date.now() - rendition.updatedAt.getTime() > STALE_PENDING_MS;
