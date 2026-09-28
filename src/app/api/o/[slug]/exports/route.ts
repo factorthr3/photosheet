@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { HttpError, parseJson, requireOrgApi, route } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
-import { getBoard } from "@/lib/boards";
+import { getBoard, toViewer } from "@/lib/boards";
 import { prisma } from "@/lib/db";
 import {
   EXPORT_TTL_MS,
@@ -32,7 +32,7 @@ export const POST = route(async (req: Request, ctx: RouteContext<"/api/o/[slug]/
 
   let label = "photosheet";
   if (body.source.type === "board") {
-    label = (await getBoard(org.org.id, body.source.boardId)).name;
+    label = (await getBoard(toViewer(org), body.source.boardId)).name;
   }
   const images = await resolveExportImages(org.org.id, body.source);
   if (images.length === 0)

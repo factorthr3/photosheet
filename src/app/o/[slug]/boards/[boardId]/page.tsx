@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { BoardView } from "@/components/boards/board-view";
 import { HttpError } from "@/lib/api";
-import { getBoard, listBoardImages } from "@/lib/boards";
+import { getBoard, listBoardImages, toViewer } from "@/lib/boards";
 import { feedQuery, parseFilters } from "@/lib/images/filters";
 import { orgPeople, topTags } from "@/lib/images/list";
 import { requireOrg } from "@/lib/org";
@@ -13,7 +13,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { slug, boardId } = await props.params;
   const ctx = await requireOrg(slug, "board:view");
-  const board = await getBoard(ctx.org.id, boardId).catch(() => null);
+  const board = await getBoard(toViewer(ctx), boardId).catch(() => null);
   return { title: board?.name ?? "Board" };
 }
 
@@ -22,7 +22,7 @@ export default async function BoardPage(props: PageProps<"/o/[slug]/boards/[boar
   const ctx = await requireOrg(slug, "board:view");
   let board;
   try {
-    board = await getBoard(ctx.org.id, boardId);
+    board = await getBoard(toViewer(ctx), boardId);
   } catch (err) {
     if (err instanceof HttpError && err.status === 404) notFound();
     throw err;
@@ -55,6 +55,8 @@ export default async function BoardPage(props: PageProps<"/o/[slug]/boards/[boar
         description: board.description,
         coverImageId: board.coverImageId,
         createdBy: board.createdBy?.name || board.createdBy?.email || null,
+        visibility: board.visibility,
+        canChangeVisibility: board.createdById === ctx.user.id || can(ctx.role, "board:delete:any"),
         canDelete:
           can(ctx.role, "board:edit") &&
           (board.createdById === ctx.user.id || can(ctx.role, "board:delete:any")),

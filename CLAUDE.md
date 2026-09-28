@@ -133,6 +133,20 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   shell used by the library and boards; pages add actions via `selectionActions` /
   `lightboxActions` render props.
 
+### Sharing
+
+- **Public links** (`ShareLink`): 192-bit random `token` is the only credential. Optional expiry
+  (stored exclusive: start of the day after the chosen last day), password (Better Auth scrypt
+  hash), allow-downloads, and allowed sizes (original and/or preset ids).
+- Public routes live under `/s/[token]` (page) and `/api/s/[token]/*`. Every one goes through
+  `requirePublicShare()` (`src/lib/public-share.ts`): active link, unlock cookie (HMAC of link id +
+  password hash — changing the password logs recipients out), same-origin on POST, per-IP rate
+  limit (`src/lib/rate-limit.ts`, Postgres fixed window). Share pages are `noindex`.
+- Recipient ZIPs are `Export` rows with `shareLinkId` (never visible via org routes).
+- **Internal sharing**: `Board.visibility` ORG|PRIVATE + `BoardMember`. Every board read goes
+  through `boardAccessWhere()` / `getBoard(viewer, id)` in `src/lib/boards.ts` — private boards
+  404 for non-members; admins see all.
+
 ### Email & audit
 
 - `sendEmail()` (`src/lib/email.ts`) uses Resend when `RESEND_API_KEY` is set; otherwise writes

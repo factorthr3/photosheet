@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { requireOrgApi, route } from "@/lib/api";
+import { getBoard, toViewer } from "@/lib/boards";
 import { listImages } from "@/lib/images/list";
 import { parseFilters } from "@/lib/images/query";
 
@@ -17,5 +18,7 @@ export const GET = route(async (req: Request, ctx: RouteContext<"/api/o/[slug]/i
     cursor: params.get("cursor") ?? undefined,
     limit: params.get("limit") ?? undefined,
   });
-  return Response.json(await listImages(org.org.id, parseFilters(params), { cursor, limit }));
+  const filters = parseFilters(params);
+  if (filters.board) await getBoard(toViewer(org), filters.board);
+  return Response.json(await listImages(org.org.id, filters, { cursor, limit }));
 });

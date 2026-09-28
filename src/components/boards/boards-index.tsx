@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, Plus } from "lucide-react";
+import { LayoutGrid, Lock, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -82,7 +82,15 @@ export function BoardsIndex({
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="truncate font-medium">{b.name}</p>
+                  <p className="flex items-center gap-1.5 truncate font-medium">
+                    {b.visibility === "PRIVATE" && (
+                      <Lock
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-label="Private"
+                      />
+                    )}
+                    {b.name}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {b.imageCount} {b.imageCount === 1 ? "image" : "images"} · Updated{" "}
                     {formatDate(b.updatedAt)}

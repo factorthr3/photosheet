@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { parseJson, requireOrgApi, route } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
-import { addImagesToBoard, listBoards } from "@/lib/boards";
+import { addImagesToBoard, listBoards, toViewer } from "@/lib/boards";
 import { prisma } from "@/lib/db";
 
 export const GET = route(async (req: Request, ctx: RouteContext<"/api/o/[slug]/boards">) => {
   const { slug } = await ctx.params;
   const org = await requireOrgApi(req, slug, "board:view");
-  return Response.json({ boards: await listBoards(org.org.id) });
+  return Response.json({ boards: await listBoards(toViewer(org)) });
 });
 
 const createSchema = z.object({

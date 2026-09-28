@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseJson, requireOrgApi, route } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
-import { addImagesToBoard, getBoard, listBoardImages } from "@/lib/boards";
+import { addImagesToBoard, getBoard, listBoardImages, toViewer } from "@/lib/boards";
 import { parseFilters } from "@/lib/images/filters";
 
 type Ctx = RouteContext<"/api/o/[slug]/boards/[boardId]/images">;
@@ -9,7 +9,7 @@ type Ctx = RouteContext<"/api/o/[slug]/boards/[boardId]/images">;
 export const GET = route(async (req: Request, ctx: Ctx) => {
   const { slug, boardId } = await ctx.params;
   const org = await requireOrgApi(req, slug, "board:view");
-  await getBoard(org.org.id, boardId);
+  await getBoard(toViewer(org), boardId);
   const params = new URL(req.url).searchParams;
   const limit = z.coerce
     .number()
@@ -32,7 +32,7 @@ const bodySchema = z.object({ imageIds: z.array(z.string()).min(1).max(10_000) }
 export const POST = route(async (req: Request, ctx: Ctx) => {
   const { slug, boardId } = await ctx.params;
   const org = await requireOrgApi(req, slug, "board:edit");
-  const board = await getBoard(org.org.id, boardId);
+  const board = await getBoard(toViewer(org), boardId);
   const { imageIds } = await parseJson(req, bodySchema);
   const added = await addImagesToBoard(org.org.id, board.id, imageIds);
   if (added) {

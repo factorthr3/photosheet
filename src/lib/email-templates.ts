@@ -108,8 +108,9 @@ export function shareEmail({
   url: string;
   expiresAt?: Date | null;
 }): Rendered {
+  // expiresAt is exclusive (start of the day after the last valid day).
   const expiry = expiresAt
-    ? `This link expires on ${expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`
+    ? `This link works until ${new Date(expiresAt.getTime() - 1).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`
     : undefined;
   const note = message?.trim()
     ? `<blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #d4d4d4;color:#404040;white-space:pre-wrap">${escapeHtml(message.trim())}</blockquote>`
