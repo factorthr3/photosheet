@@ -10,6 +10,7 @@ import { BulkEditButton } from "@/components/metadata/bulk-edit-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ResizeButton } from "@/components/resize/resize-button";
 import { ShareButton } from "@/components/share/share-dialog";
+import { TrashButton } from "@/components/trash/trash-button";
 import { Button } from "@/components/ui/button";
 import type { ImageListItem } from "@/lib/images/dto";
 import {
@@ -359,6 +360,17 @@ function ImageBrowserInner({
           />
         )}
         {selectionActions?.({ ids: [...selected], images: selectedImages, clear, feed })}
+        {capabilities.canDelete && (
+          <TrashButton
+            slug={slug}
+            imageIds={[...selected]}
+            onTrashed={(ids) => {
+              feed.removeImages(ids);
+              clear();
+            }}
+            onRestored={() => void feed.reload()}
+          />
+        )}
       </SelectionBar>
 
       <Lightbox
@@ -379,6 +391,18 @@ function ImageBrowserInner({
               canDownload={capabilities.canDownload}
               variant="lightbox"
             />
+            {capabilities.canDelete && (
+              <TrashButton
+                slug={slug}
+                imageIds={[img.id]}
+                variant="lightbox"
+                onTrashed={(ids) => {
+                  setOpenImage(null);
+                  feed.removeImages(ids);
+                }}
+                onRestored={() => void feed.reload()}
+              />
+            )}
             {capabilities.canShare && img.status === "READY" && (
               <ShareButton
                 slug={slug}

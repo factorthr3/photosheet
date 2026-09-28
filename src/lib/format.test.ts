@@ -16,3 +16,14 @@ describe("formatDate", () => {
     expect(formatDate("2026-09-28T12:00:00Z")).toBe("28 Sept 2026");
   });
 });
+
+describe("formatRelative", async () => {
+  const { formatRelative } = await import("./format");
+  const now = new Date("2026-09-28T12:00:00Z");
+  it("formats recent times", () => {
+    expect(formatRelative(new Date("2026-09-28T11:59:40Z"), now)).toBe("just now");
+    expect(formatRelative(new Date("2026-09-28T11:55:00Z"), now)).toBe("5 minutes ago");
+    expect(formatRelative(new Date("2026-09-27T12:00:00Z"), now)).toBe("yesterday");
+    expect(formatRelative(new Date("2026-08-01T12:00:00Z"), now)).toBe("1 Aug 2026");
+  });
+});

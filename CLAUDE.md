@@ -150,6 +150,18 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   through `boardAccessWhere()` / `getBoard(viewer, id)` in `src/lib/boards.ts` — private boards
   404 for non-members; admins see all.
 
+### Trash, purge & activity
+
+- Deleting is always soft (`Image.deletedAt`) via `trashImages()` (`src/lib/trash.ts`); every
+  library/board/share query already excludes trashed images. Editors can only trash/restore their
+  own uploads; admins anything. `purgeImages()` removes storage (whole image prefix) then the row,
+  and only ever touches images already in Trash.
+- The worker's `purge` queue runs daily at 03:00 UTC (pg-boss schedule): trash older than 30 days,
+  abandoned `UPLOADING` rows (>24h), expired exports, stale rate-limit buckets. "Empty trash"
+  enqueues it for one org.
+- Activity feed (`/o/[slug]/activity`, admins) reads `audit_event`; sentences come from
+  `describeEvent()` in `src/lib/activity-describe.ts` — add a case when adding an audit action.
+
 ### Email & audit
 
 - `sendEmail()` (`src/lib/email.ts`) uses Resend when `RESEND_API_KEY` is set; otherwise writes

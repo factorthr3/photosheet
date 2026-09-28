@@ -12,6 +12,7 @@ import {
   type RenderPayload,
 } from "@/lib/queue";
 import { exportJob } from "./jobs/export";
+import { type PurgePayload, purgeJob } from "./jobs/purge";
 import { processImageJob } from "./jobs/process-image";
 import { renderJob } from "./jobs/render";
 
@@ -38,6 +39,12 @@ async function main() {
     { localConcurrency: 1, ...polling },
     async ([job]) => exportJob(job),
   );
+
+  await boss.work<PurgePayload>(QUEUES.purge, { localConcurrency: 1, ...polling }, async ([job]) =>
+    purgeJob(job),
+  );
+  // Daily sweep at 03:00 UTC: expired trash, abandoned uploads, expired exports.
+  await boss.schedule(QUEUES.purge, "0 3 * * *", {}, { tz: "UTC" });
 
   console.info(`[worker] started (concurrency ${concurrency})`);
 
