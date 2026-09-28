@@ -34,6 +34,38 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - **Formatting**: Prettier (100 cols) with the Tailwind class-sorting plugin.
 - **Tests**: colocate unit tests as `*.test.ts` next to the code.
 
+## Architecture
+
+### Auth & organisations
+
+- **Better Auth** (`src/lib/auth/index.ts`, client in `src/lib/auth/client.ts`, handler at
+  `/api/auth/[...all]`). Email+password, magic link, password reset, organisation plugin.
+- Brief → schema naming: Organisation = `Organization`, Membership = `Member`, Invite =
+  `Invitation` (Better Auth's model names). Roles are stored on `Member.role`.
+- **Roles & permissions**: `src/lib/permissions.ts` is the single source of truth
+  (`can(role, capability)`). Better Auth's own access control (`src/lib/auth/roles.ts`) only
+  governs its org endpoints (invites/member changes).
+- Org-scoped UI lives under `/o/[slug]/...`. `src/proxy.ts` does an optimistic cookie check;
+  real checks happen in the page/route.
+
+### Request guards (use these, don't hand-roll)
+
+- Server components / server actions: `requireOrg(slug, capability?)` from `src/lib/org.ts`
+  (redirects to /login or 404s).
+- Route handlers: wrap with `route()` and call `requireOrgApi(req, slug, capability?)` from
+  `src/lib/api.ts` (401/403/404 JSON + same-origin CSRF check on mutating methods).
+- Server actions return `ActionResult` (`src/lib/action-result.ts`); use `actionError(err)` in
+  catch blocks.
+- Non-members always get 404, never 403, so org existence isn't leaked.
+
+### Email & audit
+
+- `sendEmail()` (`src/lib/email.ts`) uses Resend when `RESEND_API_KEY` is set; otherwise writes
+  JSON to `.mail-outbox/` (dev/tests). Templates in `src/lib/email-templates.ts` — escape all
+  interpolated values.
+- `recordAudit()` (`src/lib/audit.ts`) appends to `audit_event`. Add new action names to the
+  `AuditAction` union.
+
 ## Security rules
 
 - Every query touching org data must be scoped by `orgId` **and** checked against the caller's
