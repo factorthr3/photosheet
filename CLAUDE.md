@@ -118,6 +118,9 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - ZIPs stream: each file is streamed from storage into archiver (store mode), whose output feeds an
   S3 multipart upload (`uploadStream`). One entry at a time (`await archive 'entry'`), so memory is
   flat. Resized variants reuse the rendition cache (`upsertRendition` + `renderAndStore`).
+- Contact-sheet PDFs: layout maths in `src/lib/pdf/layout.ts` (pure, tested), drawing in
+  `contact-sheet.ts` with pdf-lib. Standard fonts are WinAnsi-only — always pass text through
+  `toWinAnsi()`. Thumbnails come from each image's 1280px preview, re-encoded to JPEG per cell.
 - Worker-imported modules must not import `server-only` (it throws outside RSC). Keep shared
   server logic in plain modules (e.g. `renditions-core.ts`, `exports.ts`).
 

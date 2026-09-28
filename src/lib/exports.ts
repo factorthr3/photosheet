@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Export, Image } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { canonicalParams, type RenderParams } from "@/lib/image/render-params";
+import type { PdfOptions } from "@/lib/pdf/layout";
 import { presignGet } from "@/lib/storage";
 
 /**
@@ -19,6 +20,15 @@ export const exportSourceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("board"), boardId: z.string() }),
 ]);
 export type ExportSource = z.infer<typeof exportSourceSchema>;
+
+export const MAX_PDF_IMAGES = 1000;
+
+export interface PdfExportParams {
+  source: ExportSource;
+  options: PdfOptions;
+  title: string;
+  orgName: string;
+}
 
 export interface ZipExportParams {
   source: ExportSource;

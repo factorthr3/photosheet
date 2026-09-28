@@ -4,6 +4,7 @@ import { ImageIcon, SearchX, Upload } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { PdfButton } from "@/components/exports/pdf-dialog";
 import { ZipButton } from "@/components/exports/zip-dialog";
 import { BulkEditButton } from "@/components/metadata/bulk-edit-dialog";
 import { PageHeader } from "@/components/page-header";
@@ -335,6 +336,14 @@ function ImageBrowserInner({
             slug={slug}
             source={{ type: "images", imageIds: [...selected] }}
             count={selected.size}
+          />
+        )}
+        {capabilities.canDownload && selected.size > 1 && (
+          <PdfButton
+            slug={slug}
+            source={{ type: "images", imageIds: [...selected] }}
+            count={selected.size}
+            defaultTitle={`${title} — selection`}
           />
         )}
         {capabilities.canEdit && (

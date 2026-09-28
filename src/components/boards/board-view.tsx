@@ -38,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { ImagePage } from "@/lib/images/list";
 import { type Capabilities, type Feed, ImageBrowser } from "@/components/library/image-browser";
 import type { FilterFacets } from "@/components/library/library-toolbar";
+import { PdfButton } from "@/components/exports/pdf-dialog";
 import { ZipButton } from "@/components/exports/zip-dialog";
 import { ShareButton } from "@/components/share/share-dialog";
 import { BoardFormDialog } from "./board-form-dialog";
@@ -181,6 +182,15 @@ export function BoardView({
                   targetId={board.id}
                   targetName={board.name}
                   canChangeVisibility={board.canChangeVisibility}
+                />
+              )}
+              {capabilities.canDownload && !!total && (
+                <PdfButton
+                  slug={slug}
+                  source={{ type: "board", boardId: board.id }}
+                  count={total}
+                  defaultTitle={board.name}
+                  size="default"
                 />
               )}
               {capabilities.canDownload && !!total && (
