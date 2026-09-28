@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BulkEditButton } from "@/components/metadata/bulk-edit-dialog";
 import { PageHeader } from "@/components/page-header";
+import { ResizeButton } from "@/components/resize/resize-button";
 import { Button } from "@/components/ui/button";
 import type { ImageListItem } from "@/lib/images/dto";
 import {
@@ -320,6 +321,13 @@ function ImageBrowserInner({
         selectingAll={selectingAll}
         onClear={clear}
       >
+        {selectedImages.length === 1 && selected.size === 1 && (
+          <ResizeButton
+            slug={slug}
+            image={selectedImages[0]}
+            canDownload={capabilities.canDownload}
+          />
+        )}
         {capabilities.canEdit && (
           <BulkEditButton
             slug={slug}
@@ -345,7 +353,17 @@ function ImageBrowserInner({
         canDownload={capabilities.canDownload}
         selected={selected}
         onToggleSelect={toggle}
-        actions={lightboxActions ? (img) => lightboxActions(img, feed) : undefined}
+        actions={(img) => (
+          <>
+            <ResizeButton
+              slug={slug}
+              image={img}
+              canDownload={capabilities.canDownload}
+              variant="lightbox"
+            />
+            {lightboxActions?.(img, feed)}
+          </>
+        )}
         canEdit={capabilities.canEdit}
         tagSuggestions={tagSuggestions}
         onImageUpdated={(img) => feed.replaceImages([img])}

@@ -99,6 +99,18 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   normalised with `normalizeTags()` (lower-case, trimmed, deduped, max 50). Bulk edits only touch
   ticked fields and add/remove tags per image in one SQL statement.
 
+### Resize, renditions & presets
+
+- Render params live in `src/lib/image/render-params.ts` (client-safe): `canonicalParams()`
+  normalises input, `paramsHash()` keys the cache, `outputSize()` predicts dimensions (contain
+  never enlarges; cover/fill hit the exact size). `renderImage()` (`render.ts`) does the sharp work
+  and strips EXIF/GPS unless `stripMetadata` is false.
+- `Rendition` rows are unique per (image, paramsHash). `getOrCreateRendition()`
+  (`src/lib/renditions.ts`) upserts and enqueues the `render` job; clients poll
+  `GET /api/o/[slug]/renditions/[id]`. The worker's `renderAndStore()` is reusable (exports).
+- `ResizePreset` rows are per org, seeded from `DEFAULT_PRESETS` on first use; admins manage them
+  in Settings.
+
 ### Boards
 
 - `Board` + `BoardImage` (composite PK, dense 0-based `position`). Service in `src/lib/boards.ts`:
