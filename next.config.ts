@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   // A stray lockfile in a parent directory otherwise confuses root detection.
   turbopack: { root: __dirname },
   poweredByHeader: false,
+  // Native / worker-thread packages must stay out of the server bundle.
+  serverExternalPackages: ["pg-boss", "pg", "heic-decode", "libheif-js"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

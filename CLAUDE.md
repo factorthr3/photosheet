@@ -58,6 +58,23 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   catch blocks.
 - Non-members always get 404, never 403, so org existence isn't leaked.
 
+### Storage, uploads & the worker
+
+- `src/lib/storage.ts` wraps the S3 SDK (any S3-compatible store). Keys are built with `keys.*`
+  under `orgs/{orgId}/…`. Never expose raw keys or public URLs — use `presignGet` (downloads,
+  5 min) or `presignThumb` (thumbnails; hour-bucketed signing so the browser cache works).
+- Upload flow: browser hashes files (SHA-256) → `POST /api/o/[slug]/uploads/check` (duplicate
+  warning) → `POST /uploads` reserves `Image` rows (status `UPLOADING`) and returns presigned
+  POST policies (key, type and max size pinned) → browser POSTs straight to the bucket →
+  `POST /uploads/[id]/complete` checks **magic bytes** (`src/lib/image/magic.ts`), sets
+  `PROCESSING` and enqueues `process-image`.
+- `worker/` is a separate process (pg-boss, `src/lib/queue.ts`). `process-image` hashes, reads
+  EXIF, and writes 320px/1280px WebP thumbnails, then marks the image `READY` (or `FAILED` after
+  retries; `UnprocessableImageError` fails immediately).
+- HEIC/HEIF: sharp's prebuilt libvips can't decode HEVC, so `src/lib/image/decode.ts` decodes
+  with `heic-decode` (libheif WASM) to raw pixels first. Always open originals via `openImage()`.
+- Originals are never modified.
+
 ### Email & audit
 
 - `sendEmail()` (`src/lib/email.ts`) uses Resend when `RESEND_API_KEY` is set; otherwise writes
