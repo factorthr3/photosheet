@@ -5,14 +5,24 @@ import type { Export, Image } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import {
   MAX_EXPORT_IMAGES,
+  MAX_PDF_IMAGES,
+  type PdfExportParams,
   resolveExportImages,
   uniqueName,
   type ZipExportParams,
 } from "@/lib/exports";
 import { renditionFilename } from "@/lib/image/render-params";
+import { buildContactSheetPdf } from "@/lib/pdf/contact-sheet";
 import { type ExportPayload, QUEUE_OPTIONS } from "@/lib/queue";
 import { upsertRendition } from "@/lib/renditions-core";
-import { getObjectStream, headObject, keys, uploadStream } from "@/lib/storage";
+import {
+  getObjectBuffer,
+  getObjectStream,
+  headObject,
+  keys,
+  putObject,
+  uploadStream,
+} from "@/lib/storage";
 import { renderAndStore } from "./render";
 
 /** Storage key + entry name for one image in the requested variant (rendering if needed). */
@@ -78,6 +88,38 @@ export async function buildZip(exp: Export) {
   return { key, bytes: head?.bytes ?? archive.pointer() };
 }
 
+/** Contact-sheet PDF from each image's 1280px preview. */
+export async function buildPdf(exp: Export) {
+  const params = exp.params as unknown as PdfExportParams;
+  const images = (await resolveExportImages(exp.orgId, params.source)).slice(0, MAX_PDF_IMAGES);
+  if (images.length === 0) throw new Error("None of the selected images are available");
+  await prisma.export.update({ where: { id: exp.id }, data: { itemCount: images.length } });
+
+  const caption = (i: Image) =>
+    params.options.caption === "title" ? i.title || i.filename : i.filename;
+  let lastReport = Date.now();
+  const bytes = await buildContactSheetPdf({
+    title: params.title,
+    subtitle: `${params.orgName} · ${images.length} ${images.length === 1 ? "image" : "images"} · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+    options: params.options,
+    images: images.map((i) => ({
+      name: caption(i),
+      load: () => getObjectBuffer(i.previewKey ?? i.thumbKey ?? i.storageKey),
+    })),
+    onProgress: async (done, total) => {
+      if (Date.now() - lastReport < 1000 && done !== total) return;
+      lastReport = Date.now();
+      await prisma.export.update({
+        where: { id: exp.id },
+        data: { progress: Math.round((done / total) * 95) },
+      });
+    },
+  });
+  const key = keys.export(exp.orgId, exp.id, "pdf");
+  await putObject(key, Buffer.from(bytes), "application/pdf", "private, max-age=0");
+  return { key, bytes: bytes.length };
+}
+
 export async function exportJob(job: Job<ExportPayload>) {
   const exp = await prisma.export.findUnique({ where: { id: job.data.exportId } });
   if (!exp || exp.status === "READY") return;
@@ -86,8 +128,9 @@ export async function exportJob(job: Job<ExportPayload>) {
     data: { status: "RUNNING", progress: 0, error: null },
   });
   try {
-    if (exp.kind !== "zip") throw new Error(`Unknown export kind: ${exp.kind}`);
-    const { key, bytes } = await buildZip(exp);
+    const build = { zip: buildZip, pdf: buildPdf }[exp.kind];
+    if (!build) throw new Error(`Unknown export kind: ${exp.kind}`);
+    const { key, bytes } = await build(exp);
     await prisma.export.update({
       where: { id: exp.id },
       data: {
