@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ImageOff, Loader2, Maximize2 } from "lucide-react";
-import { memo, useCallback, useEffect, useEffectEvent, useRef } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { ImageListItem } from "@/lib/images/dto";
 import { cn } from "@/lib/utils";
 import type { SelectModifiers, SheetBackground } from "./hooks";
@@ -10,6 +10,9 @@ import { ImageBadges } from "./image-badges";
 export function displayName(image: Pick<ImageListItem, "title" | "filename">) {
   return image.title || image.filename;
 }
+
+export type DropSide = "before" | "after";
+export type ReorderTarget = { beforeId?: string; afterId?: string };
 
 interface TileProps {
   image: ImageListItem;
@@ -20,6 +23,13 @@ interface TileProps {
   onSelect: (id: string, mods: SelectModifiers) => void;
   onOpen: (index: number) => void;
   onKeyNav: (index: number, key: string) => void;
+  reorderable: boolean;
+  dropSide: DropSide | null;
+  onDragStartTile: (id: string, e: React.DragEvent) => void;
+  onDragOverTile: (id: string, e: React.DragEvent) => void;
+  onDropTile: (id: string, e: React.DragEvent) => void;
+  onDragEndTile: () => void;
+  onKeyMove: (index: number, direction: -1 | 1) => void;
 }
 
 const coarsePointer = () =>
@@ -34,6 +44,13 @@ const Tile = memo(function Tile({
   onSelect,
   onOpen,
   onKeyNav,
+  reorderable,
+  dropSide,
+  onDragStartTile,
+  onDragOverTile,
+  onDropTile,
+  onDragEndTile,
+  onKeyMove,
 }: TileProps) {
   const name = displayName(image);
   const showCaption = size >= 120;
@@ -54,6 +71,9 @@ const Tile = memo(function Tile({
     if (e.key === "Enter") {
       e.preventDefault();
       onOpen(index);
+    } else if (reorderable && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      onKeyMove(index, e.key === "ArrowLeft" ? -1 : 1);
     } else if (e.key === " ") {
       e.preventDefault();
       onSelect(image.id, { toggle: true, shift: e.shiftKey });
@@ -74,6 +94,12 @@ const Tile = memo(function Tile({
         data-tile-index={index}
         aria-pressed={selected}
         aria-label={`${name}${selected ? ", selected" : ""}`}
+        aria-roledescription={reorderable ? "sortable image" : undefined}
+        draggable={reorderable}
+        onDragStart={reorderable ? (e) => onDragStartTile(image.id, e) : undefined}
+        onDragOver={reorderable ? (e) => onDragOverTile(image.id, e) : undefined}
+        onDrop={reorderable ? (e) => onDropTile(image.id, e) : undefined}
+        onDragEnd={reorderable ? onDragEndTile : undefined}
         onClick={handleClick}
         onDoubleClick={() => onOpen(index)}
         onKeyDown={handleKeyDown}
@@ -109,6 +135,15 @@ const Tile = memo(function Tile({
         )}
         <ImageBadges image={image} />
       </div>
+      {dropSide && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute top-0 bottom-6 w-1 rounded-full bg-[var(--sheet-accent)]",
+            dropSide === "before" ? "-left-1.5" : "-right-1.5",
+          )}
+        />
+      )}
 
       {/* Selection checkbox: always visible when selected or selecting, else on hover/focus. */}
       <button
@@ -168,6 +203,8 @@ export interface ContactSheetProps {
   loading: boolean;
   onEndReached: () => void;
   label: string;
+  /** Enable drag-and-drop (and Alt+←/→) reordering. */
+  onReorder?: (ids: string[], target: ReorderTarget) => void;
 }
 
 /** Responsive contact-sheet grid with lazy thumbnails and infinite scroll. */
@@ -184,8 +221,76 @@ export function ContactSheet({
   loading,
   onEndReached,
   label,
+  onReorder,
 }: ContactSheetProps) {
   const gridRef = useRef<HTMLUListElement>(null);
+  const dragIds = useRef<string[] | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; side: DropSide } | null>(null);
+  const reorderable = !!onReorder;
+
+  /** Dragging a selected tile moves the whole selection (in grid order). */
+  const idsToMove = useCallback(
+    (id: string) =>
+      selected.has(id) ? images.filter((i) => selected.has(i.id)).map((i) => i.id) : [id],
+    [images, selected],
+  );
+
+  const onDragStartTile = useCallback(
+    (id: string, e: React.DragEvent) => {
+      dragIds.current = idsToMove(id);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", dragIds.current.join(","));
+    },
+    [idsToMove],
+  );
+
+  const onDragOverTile = useCallback((id: string, e: React.DragEvent) => {
+    if (!dragIds.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const side: DropSide = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+    setDropTarget((t) => (t?.id === id && t.side === side ? t : { id, side }));
+  }, []);
+
+  const onDropTile = useCallback(
+    (id: string, e: React.DragEvent) => {
+      const ids = dragIds.current;
+      if (!ids || !onReorder) return;
+      e.preventDefault();
+      const side = dropTarget?.id === id ? dropTarget.side : "before";
+      if (!ids.includes(id)) onReorder(ids, side === "before" ? { beforeId: id } : { afterId: id });
+      dragIds.current = null;
+      setDropTarget(null);
+    },
+    [dropTarget, onReorder],
+  );
+
+  const onDragEndTile = useCallback(() => {
+    dragIds.current = null;
+    setDropTarget(null);
+  }, []);
+
+  const onKeyMove = useCallback(
+    (index: number, direction: -1 | 1) => {
+      if (!onReorder) return;
+      const id = images[index].id;
+      const moving = new Set(idsToMove(id));
+      let j = index + direction;
+      while (j >= 0 && j < images.length && moving.has(images[j].id)) j += direction;
+      if (j < 0 || j >= images.length) return;
+      onReorder(
+        [...moving],
+        direction < 0 ? { beforeId: images[j].id } : { afterId: images[j].id },
+      );
+      requestAnimationFrame(() =>
+        gridRef.current
+          ?.querySelector<HTMLElement>(`[data-image-id="${id}"] [data-tile-index]`)
+          ?.focus(),
+      );
+    },
+    [images, idsToMove, onReorder],
+  );
   const sentinelRef = useRef<HTMLDivElement>(null);
   const endReached = useEffectEvent(() => onEndReached());
 
@@ -236,6 +341,11 @@ export function ContactSheet({
         }
       }}
     >
+      {reorderable && (
+        <p className="sr-only">
+          Drag images to reorder, or press Alt with the left or right arrow.
+        </p>
+      )}
       <ul
         ref={gridRef}
         aria-label={label}
@@ -256,6 +366,13 @@ export function ContactSheet({
             onSelect={onSelect}
             onOpen={onOpen}
             onKeyNav={onKeyNav}
+            reorderable={reorderable}
+            dropSide={dropTarget?.id === image.id ? dropTarget.side : null}
+            onDragStartTile={onDragStartTile}
+            onDragOverTile={onDragOverTile}
+            onDropTile={onDropTile}
+            onDragEndTile={onDragEndTile}
+            onKeyMove={onKeyMove}
           />
         ))}
       </ul>

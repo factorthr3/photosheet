@@ -9,6 +9,7 @@ import {
   decodeCursor,
   encodeCursor,
   type ImageFilters,
+  type Sort,
 } from "@/lib/images/query";
 
 export interface ImagePage {
@@ -24,20 +25,22 @@ export async function listImages(
   opts: { cursor?: string; limit?: number } = {},
 ): Promise<ImagePage> {
   const limit = opts.limit ?? 60;
+  // Manual order only exists inside a board (see listBoardImages).
+  const sort: Sort = filters.sort === "manual" ? "uploaded_desc" : filters.sort;
   const where = buildWhere(orgId, filters);
   let pageWhere = where;
   if (opts.cursor) {
-    const values = decodeCursor(filters.sort, opts.cursor);
+    const values = decodeCursor(sort, opts.cursor);
     if (!values) throw new HttpError(400, "Invalid cursor", "invalid");
-    pageWhere = { AND: [where, cursorWhere(filters.sort, values)] };
+    pageWhere = { AND: [where, cursorWhere(sort, values)] };
   }
   const [rows, total] = await Promise.all([
-    prisma.image.findMany({ where: pageWhere, orderBy: buildOrderBy(filters.sort), take: limit }),
+    prisma.image.findMany({ where: pageWhere, orderBy: buildOrderBy(sort), take: limit }),
     opts.cursor ? Promise.resolve(null) : prisma.image.count({ where }),
   ]);
   return {
     images: await Promise.all(rows.map(toListItem)),
-    nextCursor: rows.length === limit ? encodeCursor(filters.sort, rows[rows.length - 1]) : null,
+    nextCursor: rows.length === limit ? encodeCursor(sort, rows[rows.length - 1]) : null,
     total,
   };
 }

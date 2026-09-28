@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { LibraryView } from "@/components/library/library-view";
+import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
-import { filtersToSearchParams, parseFilters } from "@/lib/images/filters";
+import { feedQuery, parseFilters } from "@/lib/images/filters";
 import { listImages, orgPeople, topTags } from "@/lib/images/list";
 import { requireOrg } from "@/lib/org";
 import { can } from "@/lib/permissions";
@@ -22,10 +23,15 @@ export default async function LibraryPage(props: PageProps<"/o/[slug]/library">)
     filters = parseFilters({});
   }
 
-  const [page, tags, people] = await Promise.all([
+  const [page, tags, people, boards] = await Promise.all([
     listImages(ctx.org.id, filters),
     topTags(ctx.org.id),
     orgPeople(ctx.org.id),
+    prisma.board.findMany({
+      where: { orgId: ctx.org.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
@@ -39,9 +45,10 @@ export default async function LibraryPage(props: PageProps<"/o/[slug]/library">)
         canEdit: can(ctx.role, "image:edit"),
         canDelete: can(ctx.role, "image:delete:own"),
         canShare: can(ctx.role, "share:create"),
+        canEditBoards: can(ctx.role, "board:edit"),
       }}
-      facets={{ tags, people }}
-      initial={{ query: filtersToSearchParams(filters).toString(), page }}
+      facets={{ tags, people, boards }}
+      initial={{ query: feedQuery(filters, "uploaded_desc"), page }}
     />
   );
 }

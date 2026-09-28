@@ -11,7 +11,7 @@ export const GET = route(async (req: Request, ctx: RouteContext<"/api/o/[slug]/i
   const filters = parseFilters(new URL(req.url).searchParams);
   const rows = await prisma.image.findMany({
     where: buildWhere(org.org.id, filters),
-    orderBy: buildOrderBy(filters.sort),
+    orderBy: buildOrderBy(filters.sort === "manual" ? "uploaded_desc" : filters.sort),
     select: { id: true },
     take: MAX_SELECTION,
   });

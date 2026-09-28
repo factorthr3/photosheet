@@ -26,6 +26,7 @@ model User {
   invitations   Invitation[]
   auditEvents   AuditEvent[]
   images        Image[]      @relation("uploader")
+  boards        Board[]
 
   @@unique([email])
   @@map("user")
@@ -91,6 +92,7 @@ model Organization {
   invitations Invitation[]
   auditEvents AuditEvent[]
   images      Image[]
+  boards      Board[]
 
   @@unique([slug])
   @@map("organization")
@@ -182,9 +184,12 @@ model Image {
   deletedById      String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  boards           BoardImage[]
+  coverOf          Board[]      @relation("cover")
 
   @@index([orgId, deletedAt, createdAt(sort: Desc), id(sort: Desc)])
   @@index([orgId, sha256])
+  @@index([orgId, filename])
   @@index([orgId, takenAt])
   @@index([tags], type: Gin)
   @@map("image")
@@ -204,4 +209,38 @@ model AuditEvent {
 
   @@index([orgId, createdAt(sort: Desc)])
   @@map("audit_event")
+}
+
+/// A named collection (contact sheet). Images can belong to many boards.
+model Board {
+  id           String       @id @default(uuid(7))
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  coverImageId String?
+  coverImage   Image?       @relation("cover", fields: [coverImageId], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  images       BoardImage[]
+
+  @@index([orgId, updatedAt(sort: Desc)])
+  @@map("board")
+}
+
+model BoardImage {
+  boardId  String
+  board    Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  imageId  String
+  image    Image    @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  /// 0-based manual order within the board (renumbered on reorder).
+  position Int
+  addedAt  DateTime @default(now())
+
+  @@id([boardId, imageId])
+  @@index([boardId, position])
+  @@index([imageId])
+  @@map("board_image")
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImageListItem } from "@/lib/images/dto";
 import type { ImagePage } from "@/lib/images/list";
+import { moveIds } from "@/lib/move-ids";
 import { rangeBetween } from "./selection-range";
 
 // ─── View preferences (per browser) ───────────────────────────────────────────
@@ -137,6 +138,22 @@ export function useImageFeed(
     }));
   }, []);
 
+  /** Optimistically reorder loaded images (board manual order). */
+  const moveLocal = useCallback(
+    (ids: string[], target: { beforeId?: string; afterId?: string }) => {
+      setState((s) => {
+        const byId = new Map(s.images.map((i) => [i.id, i]));
+        const order = moveIds(
+          s.images.map((i) => i.id),
+          ids,
+          target,
+        );
+        return { ...s, images: order.map((id) => byId.get(id)!) };
+      });
+    },
+    [],
+  );
+
   const stale = state.query !== query;
   return {
     images: state.images,
@@ -149,6 +166,7 @@ export function useImageFeed(
     patchImages,
     replaceImages,
     removeImages,
+    moveLocal,
   };
 }
 

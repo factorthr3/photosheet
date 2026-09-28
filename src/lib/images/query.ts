@@ -35,6 +35,7 @@ export function buildWhere(
     });
   }
   if (f.tags.length) and.push({ tags: { hasEvery: f.tags.map((t) => t.toLowerCase()) } });
+  if (f.board) and.push({ boards: { some: { boardId: f.board } } });
   if (f.uploader) and.push({ uploaderId: f.uploader });
 
   if (f.from || f.to) {
