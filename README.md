@@ -28,21 +28,26 @@ download them.
 npm install
 cp .env.example .env          # then fill in AUTH_SECRET (openssl rand -base64 32) and DATABASE_URL
 npm run db:deploy             # apply migrations
+npm run storage:init          # create the bucket (and CORS where supported)
+npm run db:seed               # optional: demo org + one user per role (see scripts/seed.ts)
 npm run dev                   # http://localhost:3000
+npm run worker                # in a second terminal: thumbnails, EXIF, exports
 ```
 
 ### Useful scripts
 
-| Script               | What it does                    |
-| -------------------- | ------------------------------- |
-| `npm run dev`        | Next.js dev server              |
-| `npm test`           | Unit tests (Vitest)             |
-| `npm run lint`       | ESLint                          |
-| `npm run typecheck`  | TypeScript                      |
-| `npm run format`     | Prettier                        |
-| `npm run db:migrate` | Create/apply a migration in dev |
-| `npm run db:deploy`  | Apply pending migrations        |
-| `npm run db:studio`  | Prisma Studio                   |
+| Script                 | What it does                    |
+| ---------------------- | ------------------------------- |
+| `npm run dev`          | Next.js dev server              |
+| `npm test`             | Unit tests (Vitest)             |
+| `npm run lint`         | ESLint                          |
+| `npm run typecheck`    | TypeScript                      |
+| `npm run format`       | Prettier                        |
+| `npm run db:migrate`   | Create/apply a migration in dev |
+| `npm run db:deploy`    | Apply pending migrations        |
+| `npm run db:studio`    | Prisma Studio                   |
+| `npm run worker`       | Background job worker           |
+| `npm run storage:init` | Create bucket / set CORS        |
 
 ### Health check
 
