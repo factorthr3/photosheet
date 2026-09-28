@@ -12,7 +12,12 @@ export const SORTS = [
 ] as const;
 export type Sort = (typeof SORTS)[number];
 
-export const SORT_LABELS: Record<Sort, string> = {
+/** A board's manual (drag-and-drop) order. Only meaningful inside a board. */
+export const MANUAL_SORT = "manual" as const;
+export type FeedSort = Sort | typeof MANUAL_SORT;
+
+export const SORT_LABELS: Record<FeedSort, string> = {
+  manual: "Board order",
   uploaded_desc: "Newest uploads",
   uploaded_asc: "Oldest uploads",
   taken_desc: "Date taken (newest)",
@@ -52,31 +57,43 @@ export const filterSchema = z.object({
   dateField: z.enum(["uploaded", "taken"]).optional().default("uploaded"),
   orientation: z.enum(ORIENTATIONS).optional(),
   licence: z.enum(["restricted", "expired", "expiring"]).optional(),
-  sort: z.enum(SORTS).optional().default("uploaded_desc"),
+  sort: z
+    .enum([...SORTS, MANUAL_SORT])
+    .optional()
+    .default("uploaded_desc"),
 });
 
 export type ImageFilters = z.infer<typeof filterSchema>;
 
-export function parseFilters(params: URLSearchParams | Record<string, string | undefined>) {
-  const obj =
+export function parseFilters(
+  params: URLSearchParams | Record<string, string | undefined>,
+  opts: { defaultSort?: FeedSort } = {},
+) {
+  const obj: Record<string, string> =
     params instanceof URLSearchParams
       ? Object.fromEntries(params.entries())
-      : Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined));
+      : (Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined)) as Record<
+          string,
+          string
+        >);
+  if (!obj.sort && opts.defaultSort) obj.sort = opts.defaultSort;
   return filterSchema.parse(obj);
 }
 
-const DEFAULTS: Partial<Record<keyof ImageFilters, string>> = {
-  sort: "uploaded_desc",
-  dateField: "uploaded",
-};
-
 /** Serialise filters back to a compact query string (defaults and empties omitted). */
-export function filtersToSearchParams(f: Partial<ImageFilters>): URLSearchParams {
+export function filtersToSearchParams(
+  f: Partial<ImageFilters>,
+  opts: { defaultSort?: FeedSort } = {},
+): URLSearchParams {
+  const defaults: Partial<Record<keyof ImageFilters, string>> = {
+    sort: opts.defaultSort ?? "uploaded_desc",
+    dateField: "uploaded",
+  };
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(f)) {
     if (value === undefined || value === null || value === "") continue;
     const str = Array.isArray(value) ? value.join(",") : String(value);
-    if (!str || DEFAULTS[key as keyof ImageFilters] === str) continue;
+    if (!str || defaults[key as keyof ImageFilters] === str) continue;
     params.set(key, str);
   }
   if (!params.has("from") && !params.has("to")) params.delete("dateField");
@@ -94,4 +111,15 @@ export function activeFilterCount(f: ImageFilters): number {
     (f.licence ? 1 : 0) +
     (f.board ? 1 : 0)
   );
+}
+
+/**
+ * The query string an image feed requests. Always carries an explicit sort so the API doesn't
+ * need to know each page's default. Used for both the SSR first page and client fetches.
+ */
+export function feedQuery(f: ImageFilters, defaultSort: FeedSort): string {
+  const p = filtersToSearchParams(f, { defaultSort });
+  p.set("sort", f.sort);
+  p.sort();
+  return p.toString();
 }

@@ -16,6 +16,9 @@ See README.md for setup and deployment.
 | Apply migrations      | `npm run db:deploy`                                     |
 | Regenerate Prisma     | `npx prisma generate` (also runs on `postinstall`)      |
 
+After changing `schema.prisma` restart `npm run dev` — the dev Prisma client is cached on
+`globalThis` and survives hot reloads.
+
 Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run build`.
 
 ## Stack & conventions
@@ -90,6 +93,18 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   and the open image (`?image=`) live in the URL via `history.replaceState/pushState` (no server
   round-trip). Per-browser view prefs (tile size, sheet background) are in localStorage.
 - Licence warnings: `licenceState()` in `src/lib/images/licence.ts`.
+
+### Boards
+
+- `Board` + `BoardImage` (composite PK, dense 0-based `position`). Service in `src/lib/boards.ts`:
+  add/remove/reorder run in a transaction that locks the board row (`SELECT … FOR UPDATE`) and
+  renumber positions with one `UPDATE … FROM unnest(...)`. `moveIds()` (`src/lib/move-ids.ts`) is
+  the pure ordering rule shared by server and client (optimistic reorder).
+- Board feeds support the library sorts plus `manual` (keyset on position). Manual reorder (drag
+  and drop, or Alt+←/→) is only enabled in manual sort with no filters.
+- `ImageBrowser` (`src/components/library/image-browser.tsx`) is the shared grid+lightbox+selection
+  shell used by the library and boards; pages add actions via `selectionActions` /
+  `lightboxActions` render props.
 
 ### Email & audit
 

@@ -19,10 +19,10 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   activeFilterCount,
+  type FeedSort,
   type ImageFilters,
   SORT_LABELS,
   SORTS,
-  type Sort,
 } from "@/lib/images/filters";
 import { LICENCE_PRESETS } from "@/lib/images/licence";
 import type { SheetBackground, ViewPrefs } from "./hooks";
@@ -368,45 +368,34 @@ export function LibraryToolbar({
   onChange,
   prefs,
   onPrefs,
-  hideSort = false,
-  extraSort,
+  includeManualSort = false,
 }: {
   filters: ImageFilters;
   facets: FilterFacets;
   onChange: (patch: Patch) => void;
   prefs: ViewPrefs;
   onPrefs: (patch: Partial<ViewPrefs>) => void;
-  hideSort?: boolean;
-  /** Extra leading sort option (e.g. a board's manual order). */
-  extraSort?: { value: string; label: string; active: boolean; onSelect: () => void };
+  /** Offer "Board order" (boards only). */
+  includeManualSort?: boolean;
 }) {
+  const sorts: FeedSort[] = includeManualSort ? ["manual", ...SORTS] : [...SORTS];
   return (
     <div className="sticky top-0 z-20 grid gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6 md:top-0">
       <div className="flex flex-wrap items-center gap-2">
         <SearchBox value={filters.q} onChange={(q) => onChange({ q })} />
         <FiltersPopover filters={filters} facets={facets} onChange={onChange} />
-        {!hideSort && (
-          <Select
-            value={extraSort?.active ? extraSort.value : filters.sort}
-            onValueChange={(v) =>
-              extraSort && v === extraSort.value
-                ? extraSort.onSelect()
-                : onChange({ sort: v as Sort })
-            }
-          >
-            <SelectTrigger className="w-auto min-w-44" aria-label="Sort by">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {extraSort && <SelectItem value={extraSort.value}>{extraSort.label}</SelectItem>}
-              {SORTS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {SORT_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={filters.sort} onValueChange={(v) => onChange({ sort: v as FeedSort })}>
+          <SelectTrigger className="w-auto min-w-44" aria-label="Sort by">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sorts.map((s) => (
+              <SelectItem key={s} value={s}>
+                {SORT_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="ml-auto flex items-center gap-3">
           <Slider
             aria-label="Thumbnail size"
