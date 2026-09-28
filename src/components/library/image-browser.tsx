@@ -4,6 +4,7 @@ import { ImageIcon, SearchX, Upload } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { BulkEditButton } from "@/components/metadata/bulk-edit-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { ImageListItem } from "@/lib/images/dto";
@@ -18,7 +19,7 @@ import {
 import type { ImagePage } from "@/lib/images/list";
 import { ContactSheet, type ReorderTarget } from "./contact-sheet";
 import { useImageFeed, useSelection, useViewPrefs } from "./hooks";
-import { Lightbox } from "./lightbox";
+import { invalidateImageDetail, Lightbox } from "./lightbox";
 import { type FilterFacets, LibraryToolbar } from "./library-toolbar";
 import { SelectionBar } from "./selection-bar";
 import { UploadButton, UploaderProvider, useUploader } from "./uploader";
@@ -248,6 +249,7 @@ function ImageBrowserInner({
   }
 
   const selectedImages = feed.images.filter((i) => selected.has(i.id));
+  const tagSuggestions = useMemo(() => facets.tags.map((t) => t.tag), [facets.tags]);
 
   return (
     <>
@@ -318,6 +320,18 @@ function ImageBrowserInner({
         selectingAll={selectingAll}
         onClear={clear}
       >
+        {capabilities.canEdit && (
+          <BulkEditButton
+            slug={slug}
+            imageIds={[...selected]}
+            tagSuggestions={tagSuggestions}
+            onUpdated={(images) => {
+              invalidateImageDetail([...selected]);
+              if (images) feed.replaceImages(images);
+              else void feed.reload();
+            }}
+          />
+        )}
         {selectionActions?.({ ids: [...selected], images: selectedImages, clear, feed })}
       </SelectionBar>
 
@@ -332,6 +346,9 @@ function ImageBrowserInner({
         selected={selected}
         onToggleSelect={toggle}
         actions={lightboxActions ? (img) => lightboxActions(img, feed) : undefined}
+        canEdit={capabilities.canEdit}
+        tagSuggestions={tagSuggestions}
+        onImageUpdated={(img) => feed.replaceImages([img])}
       />
     </>
   );

@@ -92,7 +92,12 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - UI: `LibraryView` composes toolbar → `ContactSheet` → `SelectionBar` → `Lightbox`. Filter state
   and the open image (`?image=`) live in the URL via `history.replaceState/pushState` (no server
   round-trip). Per-browser view prefs (tile size, sheet background) are in localStorage.
-- Licence warnings: `licenceState()` in `src/lib/images/licence.ts`.
+- Licence warnings: `licenceState()` in `src/lib/images/licence.ts` (expired / expiring within
+  30 days / restricted = anything but "unlimited"). Tiles show badges; the lightbox shows a banner.
+- Metadata: validation in `src/lib/images/metadata.ts` (empty string → null, expiry is a
+  YYYY-MM-DD date stored at midnight UTC), writes in `metadata.server.ts`. Tags are always
+  normalised with `normalizeTags()` (lower-case, trimmed, deduped, max 50). Bulk edits only touch
+  ticked fields and add/remove tags per image in one SQL statement.
 
 ### Boards
 
