@@ -20,7 +20,8 @@
     "postdb:migrate": "prisma generate",
     "worker": "tsx worker/index.ts",
     "worker:dev": "tsx watch worker/index.ts",
-    "storage:init": "tsx scripts/storage-init.ts"
+    "storage:init": "tsx scripts/storage-init.ts",
+    "db:seed-images": "tsx scripts/seed-images.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",
@@ -52,6 +53,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",

@@ -15,6 +15,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -137,8 +138,7 @@ export function UploaderProvider({
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const files = useRef(new Map<string, File>());
-  const onReadyRef = useRef(onImagesReady);
-  onReadyRef.current = onImagesReady;
+  const notifyReady = useEffectEvent((ids: string[]) => onImagesReady?.(ids));
 
   const update = useCallback((clientId: string, patch: Partial<UploadItem>) => {
     setItems((prev) => prev.map((i) => (i.clientId === clientId ? { ...i, ...patch } : i)));
@@ -329,7 +329,7 @@ export function UploaderProvider({
           }),
         );
         const ready = images.filter((img) => img.status === "READY").map((img) => img.id);
-        if (ready.length) onReadyRef.current?.(ready);
+        if (ready.length) notifyReady(ready);
       } catch {
         // try again next tick
       }
