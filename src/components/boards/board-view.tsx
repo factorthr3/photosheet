@@ -5,6 +5,7 @@ import {
   ArrowUpToLine,
   ImagePlus,
   LayoutGrid,
+  Lock,
   MoreHorizontal,
   Pencil,
   Star,
@@ -38,6 +39,7 @@ import type { ImagePage } from "@/lib/images/list";
 import { type Capabilities, type Feed, ImageBrowser } from "@/components/library/image-browser";
 import type { FilterFacets } from "@/components/library/library-toolbar";
 import { ZipButton } from "@/components/exports/zip-dialog";
+import { ShareButton } from "@/components/share/share-dialog";
 import { BoardFormDialog } from "./board-form-dialog";
 
 export interface BoardInfo {
@@ -47,6 +49,8 @@ export interface BoardInfo {
   coverImageId: string | null;
   createdBy: string | null;
   canDelete: boolean;
+  visibility: "ORG" | "PRIVATE";
+  canChangeVisibility: boolean;
 }
 
 async function api(url: string, init: RequestInit) {
@@ -153,7 +157,12 @@ export function BoardView({
                   Boards
                 </Link>
               </nav>
-              <h1 className="truncate text-2xl font-semibold tracking-tight">{board.name}</h1>
+              <h1 className="flex items-center gap-2 truncate text-2xl font-semibold tracking-tight">
+                {board.name}
+                {board.visibility === "PRIVATE" && (
+                  <Lock className="size-4 text-muted-foreground" aria-label="Private board" />
+                )}
+              </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {total === null
                   ? ""
@@ -165,6 +174,15 @@ export function BoardView({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {capabilities.canShare && (
+                <ShareButton
+                  slug={slug}
+                  targetType="board"
+                  targetId={board.id}
+                  targetName={board.name}
+                  canChangeVisibility={board.canChangeVisibility}
+                />
+              )}
               {capabilities.canDownload && !!total && (
                 <ZipButton
                   slug={slug}

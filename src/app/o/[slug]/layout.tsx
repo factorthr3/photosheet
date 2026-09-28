@@ -2,7 +2,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { listUserOrgs, requireOrg } from "@/lib/org";
 
 /** Nav sections that exist so far; extended as features land. */
-const ENABLED_SEGMENTS = ["library", "boards", "members", "settings"];
+const ENABLED_SEGMENTS = ["library", "boards", "shares", "members", "settings"];
 
 export default async function OrgLayout(props: LayoutProps<"/o/[slug]">) {
   const { slug } = await props.params;

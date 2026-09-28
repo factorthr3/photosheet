@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseJson, requireOrgApi, route } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
-import { getBoard, removeImagesFromBoard } from "@/lib/boards";
+import { getBoard, removeImagesFromBoard, toViewer } from "@/lib/boards";
 
 const bodySchema = z.object({ imageIds: z.array(z.string()).min(1).max(10_000) });
 
@@ -10,7 +10,7 @@ export const POST = route(
   async (req: Request, ctx: RouteContext<"/api/o/[slug]/boards/[boardId]/images/remove">) => {
     const { slug, boardId } = await ctx.params;
     const org = await requireOrgApi(req, slug, "board:edit");
-    const board = await getBoard(org.org.id, boardId);
+    const board = await getBoard(toViewer(org), boardId);
     const { imageIds } = await parseJson(req, bodySchema);
     const removed = await removeImagesFromBoard(board.id, imageIds);
     await recordAudit({

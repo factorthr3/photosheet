@@ -6,16 +6,46 @@ import { toListItem } from "@/lib/images/dto";
 import { type ImagePage, listImages } from "@/lib/images/list";
 import { buildWhere, type ImageFilters } from "@/lib/images/query";
 import { moveIds } from "@/lib/move-ids";
+import { can, type Role } from "@/lib/permissions";
 import { presignThumb } from "@/lib/storage";
 
 export { moveIds };
 
 type Tx = Prisma.TransactionClient;
 
+/** Who is looking at boards. Admins and owners see every board in the org. */
+export interface BoardViewer {
+  orgId: string;
+  userId: string;
+  role: Role;
+}
+
+export function toViewer(ctx: {
+  org: { id: string };
+  user: { id: string };
+  role: Role;
+}): BoardViewer {
+  return { orgId: ctx.org.id, userId: ctx.user.id, role: ctx.role };
+}
+
+/** Boards the viewer may see: org-wide boards, plus private ones they created or were added to. */
+export function boardAccessWhere(v: BoardViewer): Prisma.BoardWhereInput {
+  if (can(v.role, "board:delete:any")) return { orgId: v.orgId };
+  return {
+    orgId: v.orgId,
+    OR: [
+      { visibility: "ORG" },
+      { createdById: v.userId },
+      { members: { some: { userId: v.userId } } },
+    ],
+  };
+}
+
 export interface BoardSummary {
   id: string;
   name: string;
   description: string | null;
+  visibility: "ORG" | "PRIVATE";
   imageCount: number;
   coverUrl: string | null;
   createdById: string | null;
@@ -23,9 +53,9 @@ export interface BoardSummary {
 }
 
 /** Boards in an org with counts and a cover thumbnail (explicit cover, else the first image). */
-export async function listBoards(orgId: string): Promise<BoardSummary[]> {
+export async function listBoards(viewer: BoardViewer): Promise<BoardSummary[]> {
   const boards = await prisma.board.findMany({
-    where: { orgId },
+    where: boardAccessWhere(viewer),
     orderBy: { updatedAt: "desc" },
     include: {
       _count: { select: { images: { where: { image: { deletedAt: null } } } } },
@@ -47,6 +77,7 @@ export async function listBoards(orgId: string): Promise<BoardSummary[]> {
         id: b.id,
         name: b.name,
         description: b.description,
+        visibility: b.visibility,
         imageCount: b._count.images,
         coverUrl: key ? await presignThumb(key) : null,
         createdById: b.createdById,
@@ -56,9 +87,10 @@ export async function listBoards(orgId: string): Promise<BoardSummary[]> {
   );
 }
 
-export async function getBoard(orgId: string, boardId: string) {
+/** A board the viewer may see, else 404 (private boards don't reveal they exist). */
+export async function getBoard(viewer: BoardViewer, boardId: string) {
   const board = await prisma.board.findFirst({
-    where: { id: boardId, orgId },
+    where: { AND: [{ id: boardId }, boardAccessWhere(viewer)] },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
   });
   if (!board) throw new HttpError(404, "Board not found", "not_found");

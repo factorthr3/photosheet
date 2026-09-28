@@ -1,4 +1,5 @@
 import { requireOrgApi, route } from "@/lib/api";
+import { getBoard, toViewer } from "@/lib/boards";
 import { prisma } from "@/lib/db";
 import { buildOrderBy, buildWhere, parseFilters } from "@/lib/images/query";
 
@@ -9,6 +10,7 @@ export const GET = route(async (req: Request, ctx: RouteContext<"/api/o/[slug]/i
   const { slug } = await ctx.params;
   const org = await requireOrgApi(req, slug, "image:view");
   const filters = parseFilters(new URL(req.url).searchParams);
+  if (filters.board) await getBoard(toViewer(org), filters.board);
   const rows = await prisma.image.findMany({
     where: buildWhere(org.org.id, filters),
     orderBy: buildOrderBy(filters.sort === "manual" ? "uploaded_desc" : filters.sort),

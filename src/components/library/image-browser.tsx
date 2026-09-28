@@ -8,6 +8,7 @@ import { ZipButton } from "@/components/exports/zip-dialog";
 import { BulkEditButton } from "@/components/metadata/bulk-edit-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ResizeButton } from "@/components/resize/resize-button";
+import { ShareButton } from "@/components/share/share-dialog";
 import { Button } from "@/components/ui/button";
 import type { ImageListItem } from "@/lib/images/dto";
 import {
@@ -369,6 +370,15 @@ function ImageBrowserInner({
               canDownload={capabilities.canDownload}
               variant="lightbox"
             />
+            {capabilities.canShare && img.status === "READY" && (
+              <ShareButton
+                slug={slug}
+                targetType="image"
+                targetId={img.id}
+                targetName={img.title || img.filename}
+                variant="lightbox"
+              />
+            )}
             {lightboxActions?.(img, feed)}
           </>
         )}

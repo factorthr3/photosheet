@@ -101,7 +101,9 @@ describe("board operations", () => {
     await prisma.image.update({ where: { id: ids[0] }, data: { deletedAt: new Date() } });
     const page = await listBoardImages(orgId, boardId, parseFilters({ sort: "manual" }));
     expect(page.images.map((i) => i.id)).toEqual([ids[4], ids[2]]);
-    const summary = (await listBoards(orgId)).find((b) => b.id === boardId);
+    const summary = (await listBoards({ orgId, userId: "nobody", role: "admin" })).find(
+      (b) => b.id === boardId,
+    );
     expect(summary?.imageCount).toBe(2);
   });
 });

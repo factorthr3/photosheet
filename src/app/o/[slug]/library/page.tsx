@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LibraryView } from "@/components/library/library-view";
+import { boardAccessWhere, getBoard, toViewer } from "@/lib/boards";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { feedQuery, parseFilters } from "@/lib/images/filters";
@@ -23,12 +24,17 @@ export default async function LibraryPage(props: PageProps<"/o/[slug]/library">)
     filters = parseFilters({});
   }
 
+  // Filtering by a board you can't see behaves like no filter at all.
+  if (filters.board && !(await getBoard(toViewer(ctx), filters.board).catch(() => null))) {
+    filters = { ...filters, board: undefined };
+  }
+
   const [page, tags, people, boards] = await Promise.all([
     listImages(ctx.org.id, filters),
     topTags(ctx.org.id),
     orgPeople(ctx.org.id),
     prisma.board.findMany({
-      where: { orgId: ctx.org.id },
+      where: boardAccessWhere(toViewer(ctx)),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

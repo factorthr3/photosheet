@@ -13,21 +13,23 @@ datasource db {
 }
 
 model User {
-  id            String       @id
+  id            String        @id
   name          String
   email         String
-  emailVerified Boolean      @default(false)
+  emailVerified Boolean       @default(false)
   image         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
   sessions      Session[]
   accounts      Account[]
   members       Member[]
   invitations   Invitation[]
   auditEvents   AuditEvent[]
-  images        Image[]      @relation("uploader")
+  images        Image[]       @relation("uploader")
   boards        Board[]
   exports       Export[]
+  shareLinks    ShareLink[]
+  boardAccess   BoardMember[] @relation("boardMember")
 
   @@unique([email])
   @@map("user")
@@ -96,6 +98,7 @@ model Organization {
   boards      Board[]
   presets     ResizePreset[]
   exports     Export[]
+  shareLinks  ShareLink[]
 
   @@unique([slug])
   @@map("organization")
@@ -190,6 +193,7 @@ model Image {
   boards           BoardImage[]
   coverOf          Board[]      @relation("cover")
   renditions       Rendition[]
+  shareLinks       ShareLink[]
 
   @@index([orgId, deletedAt, createdAt(sort: Desc), id(sort: Desc)])
   @@index([orgId, sha256])
@@ -215,20 +219,29 @@ model AuditEvent {
   @@map("audit_event")
 }
 
+enum BoardVisibility {
+  ORG
+  PRIVATE
+}
+
 /// A named collection (contact sheet). Images can belong to many boards.
 model Board {
-  id           String       @id @default(uuid(7))
+  id           String          @id @default(uuid(7))
   orgId        String
-  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org          Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   name         String
   description  String?
   coverImageId String?
-  coverImage   Image?       @relation("cover", fields: [coverImageId], references: [id], onDelete: SetNull)
+  coverImage   Image?          @relation("cover", fields: [coverImageId], references: [id], onDelete: SetNull)
   createdById  String?
-  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdBy    User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// ORG: everyone in the organisation. PRIVATE: creator, admins and listed members only.
+  visibility   BoardVisibility @default(ORG)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   images       BoardImage[]
+  members      BoardMember[]
+  shareLinks   ShareLink[]
 
   @@index([orgId, updatedAt(sort: Desc)])
   @@map("board")
@@ -314,6 +327,9 @@ model Export {
   org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   createdById String?
   createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// Set when a recipient of a public share link requested the export
+  shareLinkId String?
+  shareLink   ShareLink?   @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
   /// zip | pdf
   kind        String
   status      ExportStatus @default(PENDING)
@@ -332,4 +348,61 @@ model Export {
   @@index([orgId, createdAt(sort: Desc)])
   @@index([expiresAt])
   @@map("export")
+}
+
+/// Internal sharing: an org member given access to (or notified about) a board.
+model BoardMember {
+  boardId   String
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("boardMember", fields: [userId], references: [id], onDelete: Cascade)
+  addedById String?
+  createdAt DateTime @default(now())
+
+  @@id([boardId, userId])
+  @@index([userId])
+  @@map("board_member")
+}
+
+/// Public link to an image or board. The token is the only credential (192-bit random).
+model ShareLink {
+  id               String       @id @default(uuid(7))
+  orgId            String
+  org              Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  token            String       @unique
+  /// image | board
+  targetType       String
+  imageId          String?
+  image            Image?       @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  boardId          String?
+  board            Board?       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  title            String?
+  message          String?
+  passwordHash     String?
+  expiresAt        DateTime?
+  allowDownload    Boolean      @default(true)
+  allowOriginal    Boolean      @default(false)
+  /// ResizePreset ids recipients may download
+  allowedPresetIds String[]     @default([])
+  views            Int          @default(0)
+  downloads        Int          @default(0)
+  lastViewedAt     DateTime?
+  revokedAt        DateTime?
+  createdById      String?
+  createdBy        User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  exports          Export[]
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@map("share_link")
+}
+
+/// Fixed-window counters for rate limiting app endpoints (auth uses Better Auth's own).
+model RateLimitBucket {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+
+  @@map("rate_limit_bucket")
 }
