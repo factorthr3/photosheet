@@ -82,7 +82,7 @@ model Verification {
 }
 
 model Organization {
-  id          String       @id
+  id          String         @id
   name        String
   slug        String
   logo        String?
@@ -93,6 +93,7 @@ model Organization {
   auditEvents AuditEvent[]
   images      Image[]
   boards      Board[]
+  presets     ResizePreset[]
 
   @@unique([slug])
   @@map("organization")
@@ -186,6 +187,7 @@ model Image {
   updatedAt        DateTime     @updatedAt
   boards           BoardImage[]
   coverOf          Board[]      @relation("cover")
+  renditions       Rendition[]
 
   @@index([orgId, deletedAt, createdAt(sort: Desc), id(sort: Desc)])
   @@index([orgId, sha256])
@@ -243,4 +245,55 @@ model BoardImage {
   @@index([boardId, position])
   @@index([imageId])
   @@map("board_image")
+}
+
+enum RenditionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// A cached resize/convert of an original, keyed by (image, params).
+model Rendition {
+  id         String          @id @default(uuid(7))
+  imageId    String
+  image      Image           @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  paramsHash String
+  /// Canonical render params (see src/lib/image/render-params.ts)
+  params     Json
+  format     String
+  status     RenditionStatus @default(PENDING)
+  storageKey String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  error      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([imageId, paramsHash])
+  @@map("rendition")
+}
+
+/// Named export sizes, editable per organisation.
+model ResizePreset {
+  id            String       @id @default(uuid(7))
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String
+  /// null = keep the original dimension
+  width         Int?
+  height        Int?
+  /// contain | cover | fill
+  fit           String       @default("contain")
+  /// jpeg | png | webp | avif
+  format        String       @default("jpeg")
+  quality       Int          @default(85)
+  stripMetadata Boolean      @default(true)
+  position      Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orgId, position])
+  @@map("resize_preset")
 }
