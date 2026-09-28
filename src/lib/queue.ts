@@ -91,3 +91,12 @@ export async function enqueueExport(exportId: string) {
   const boss = await getBoss();
   await boss.send(QUEUES.export, { exportId } satisfies ExportPayload, { singletonKey: exportId });
 }
+
+export async function enqueuePurge(payload: { orgId?: string; userId?: string } = {}) {
+  const boss = await getBoss();
+  await boss.send(
+    QUEUES.purge,
+    payload,
+    payload.orgId ? { singletonKey: `purge:${payload.orgId}` } : {},
+  );
+}

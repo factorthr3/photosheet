@@ -32,3 +32,17 @@ export function formatBytes(bytes: number | bigint | null | undefined): string {
   }
   return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
 }
+
+const rtf = new Intl.RelativeTimeFormat("en-GB", { numeric: "auto" });
+
+/** "just now", "5 minutes ago", "yesterday", else a date. */
+export function formatRelative(value: string | Date, now: Date = new Date()): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const s = Math.round((d.getTime() - now.getTime()) / 1000);
+  const abs = Math.abs(s);
+  if (abs < 45) return "just now";
+  if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
+  if (abs < 86_400) return rtf.format(Math.round(s / 3600), "hour");
+  if (abs < 7 * 86_400) return rtf.format(Math.round(s / 86_400), "day");
+  return formatDate(d);
+}
