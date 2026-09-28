@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
@@ -15,7 +15,9 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:seed": "tsx scripts/seed.ts",
+    "postdb:migrate": "prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",
@@ -36,6 +38,8 @@
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "resend": "^6.30.0",
+    "server-only": "^0.0.1",
     "shadcn": "^4.21.0",
     "sharp": "^0.35.5",
     "sonner": "^2.0.8",
