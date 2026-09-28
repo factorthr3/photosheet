@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -9,10 +10,12 @@ import {
   Loader2,
   Maximize,
   Minimize,
+  Pencil,
   X,
 } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MetadataEditor } from "@/components/metadata/metadata-editor";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatBytes, formatDate, formatDateTime } from "@/lib/format";
@@ -69,6 +72,7 @@ function useImageDetail(slug: string, id: string | undefined, enabled: boolean) 
   const [detail, setDetail] = useState<ImageDetail | null>(
     id ? (detailCache.get(id) ?? null) : null,
   );
+  const [version, setVersion] = useState(0);
   useEffect(() => {
     if (!id || !enabled) return;
     const cached = detailCache.get(id);
@@ -87,13 +91,21 @@ function useImageDetail(slug: string, id: string | undefined, enabled: boolean) 
     return () => {
       cancelled = true;
     };
-  }, [slug, id, enabled]);
-  return detail;
+  }, [slug, id, enabled, version]);
+  const update = useCallback((d: ImageDetail) => {
+    cacheImageDetail(d);
+    setVersion((v) => v + 1);
+  }, []);
+  return [detail, update] as const;
 }
 
 /** Drop cached details (after edits). */
 export function invalidateImageDetail(ids: string[]) {
   for (const id of ids) detailCache.delete(id);
+}
+
+function cacheImageDetail(detail: ImageDetail) {
+  detailCache.set(detail.id, detail);
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -106,15 +118,51 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function InfoPanel({ image, detail }: { image: ImageListItem; detail: ImageDetail | null }) {
+function InfoPanel({
+  slug,
+  image,
+  detail,
+  canEdit,
+  tagSuggestions,
+  onSaved,
+}: {
+  slug: string;
+  image: ImageListItem;
+  detail: ImageDetail | null;
+  canEdit: boolean;
+  tagSuggestions: string[];
+  onSaved: (detail: ImageDetail) => void;
+}) {
   const lstate = licenceState(image.licence, image.licenceExpiresAt);
+  const [editing, setEditing] = useState<string | null>(null);
+  const isEditing = editing === image.id && !!detail;
   return (
     <aside
       aria-label="Image details"
-      className="w-full shrink-0 overflow-y-auto border-white/10 bg-neutral-900/95 p-5 md:w-80 md:border-l"
+      className="dark w-full shrink-0 overflow-y-auto border-white/10 bg-neutral-900/95 p-5 text-white md:w-80 md:border-l"
     >
-      <h2 className="mb-4 text-base font-semibold break-words text-white">{displayName(image)}</h2>
-      {!detail ? (
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <h2 className="text-base font-semibold break-words text-white">{displayName(image)}</h2>
+        {canEdit && detail && !isEditing && (
+          <Button variant="secondary" size="sm" onClick={() => setEditing(image.id)}>
+            <Pencil />
+            Edit
+          </Button>
+        )}
+      </div>
+      {isEditing ? (
+        <MetadataEditor
+          key={detail.id}
+          slug={slug}
+          image={detail}
+          tagSuggestions={tagSuggestions}
+          onCancel={() => setEditing(null)}
+          onSaved={(d) => {
+            setEditing(null);
+            onSaved(d);
+          }}
+        />
+      ) : !detail ? (
         <Loader2 className="size-4 animate-spin text-white/60" aria-label="Loading details" />
       ) : (
         <dl className="grid gap-3">
@@ -178,6 +226,34 @@ function InfoPanel({ image, detail }: { image: ImageListItem; detail: ImageDetai
   );
 }
 
+function LicenceBanner({ image }: { image: ImageListItem }) {
+  const state = licenceState(image.licence, image.licenceExpiresAt);
+  if (state !== "expired" && state !== "expiring" && state !== "restricted") return null;
+  const label = licenceLabel(image.licence);
+  const text =
+    state === "expired"
+      ? `Licence expired on ${formatDate(image.licenceExpiresAt)} — do not use this image.`
+      : state === "expiring"
+        ? `Licence expires on ${formatDate(image.licenceExpiresAt)}${label ? ` (${label})` : ""}.`
+        : `Restricted: ${label}. Check usage rights before publishing.`;
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex items-center gap-2 px-4 py-2 text-sm font-medium",
+        state === "expired"
+          ? "bg-red-600 text-white"
+          : state === "expiring"
+            ? "bg-amber-400 text-amber-950"
+            : "bg-white/10 text-white",
+      )}
+    >
+      <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+      {text}
+    </div>
+  );
+}
+
 export interface LightboxProps {
   slug: string;
   images: ImageListItem[];
@@ -190,6 +266,9 @@ export interface LightboxProps {
   onToggleSelect?: (id: string) => void;
   /** Extra toolbar actions for the current image (resize, edit, add to board…). */
   actions?: (image: ImageListItem) => React.ReactNode;
+  canEdit?: boolean;
+  tagSuggestions?: string[];
+  onImageUpdated?: (image: ImageListItem) => void;
 }
 
 /** Full-screen viewer. ←/→ to move, I for info, F for full size, S to select, Esc to close. */
@@ -204,13 +283,16 @@ export function Lightbox({
   selected,
   onToggleSelect,
   actions,
+  canEdit = false,
+  tagSuggestions = [],
+  onImageUpdated,
 }: LightboxProps) {
   const open = index !== null && index >= 0 && index < images.length;
   const image = open ? images[index] : undefined;
   const [showInfo, setShowInfo] = useState(false);
   const [fullSize, setFullSize] = useState(false);
   const [loaded, setLoaded] = useState<string | null>(null);
-  const detail = useImageDetail(slug, image?.id, open && showInfo);
+  const [detail, setDetail] = useImageDetail(slug, image?.id, open && showInfo);
   const touchStart = useRef<number | null>(null);
 
   const go = useCallback(
@@ -327,6 +409,7 @@ export function Lightbox({
                 </DialogPrimitive.Close>
               </header>
 
+              <LicenceBanner image={image} />
               <div className="flex min-h-0 flex-1 flex-col md:flex-row">
                 <div
                   className={cn(
@@ -397,7 +480,19 @@ export function Lightbox({
                     <ChevronRight className="size-6" />
                   </button>
                 </div>
-                {showInfo && <InfoPanel image={image} detail={detail} />}
+                {showInfo && (
+                  <InfoPanel
+                    slug={slug}
+                    image={image}
+                    detail={detail}
+                    canEdit={canEdit}
+                    tagSuggestions={tagSuggestions}
+                    onSaved={(d) => {
+                      setDetail(d);
+                      onImageUpdated?.(d);
+                    }}
+                  />
+                )}
               </div>
             </>
           )}
