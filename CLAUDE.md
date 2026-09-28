@@ -111,6 +111,16 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - `ResizePreset` rows are per org, seeded from `DEFAULT_PRESETS` on first use; admins manage them
   in Settings.
 
+### Exports (ZIP, PDF)
+
+- `Export` rows track background downloads (`kind` zip|pdf, status, progress, 7-day expiry).
+  Params are snapshotted at creation (`src/lib/exports.ts`); the worker's `export` job builds them.
+- ZIPs stream: each file is streamed from storage into archiver (store mode), whose output feeds an
+  S3 multipart upload (`uploadStream`). One entry at a time (`await archive 'entry'`), so memory is
+  flat. Resized variants reuse the rendition cache (`upsertRendition` + `renderAndStore`).
+- Worker-imported modules must not import `server-only` (it throws outside RSC). Keep shared
+  server logic in plain modules (e.g. `renditions-core.ts`, `exports.ts`).
+
 ### Boards
 
 - `Board` + `BoardImage` (composite PK, dense 0-based `position`). Service in `src/lib/boards.ts`:

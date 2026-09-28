@@ -37,6 +37,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { ImagePage } from "@/lib/images/list";
 import { type Capabilities, type Feed, ImageBrowser } from "@/components/library/image-browser";
 import type { FilterFacets } from "@/components/library/library-toolbar";
+import { ZipButton } from "@/components/exports/zip-dialog";
 import { BoardFormDialog } from "./board-form-dialog";
 
 export interface BoardInfo {
@@ -164,6 +165,14 @@ export function BoardView({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {capabilities.canDownload && !!total && (
+                <ZipButton
+                  slug={slug}
+                  source={{ type: "board", boardId: board.id }}
+                  count={total}
+                  size="default"
+                />
+              )}
               <Button asChild variant="outline">
                 <Link href={`/o/${slug}/library`}>
                   <ImagePlus />
