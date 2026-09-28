@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PhotoSheet
 
-## Getting Started
+A web-based contact sheet and image library that acts as the golden source for a company's photos.
+Teams upload images to one place, organise them into boards, resize/convert on demand and share or
+download them.
 
-First, run the development server:
+- **Stack**: Next.js 16 (App Router) · TypeScript · Tailwind + shadcn/ui · Prisma 7 + PostgreSQL ·
+  S3-compatible storage · sharp · pg-boss · Better Auth · Resend
+- **Hosting**: Railway (web + worker + Postgres + Bucket)
+
+## Local development
+
+### Prerequisites
+
+- Node.js 20.9+ (tested on 25)
+- PostgreSQL 15+ and an S3-compatible store. On macOS with Homebrew:
+
+  ```bash
+  brew install postgresql@17 minio
+  brew services start postgresql@17
+  brew services start minio   # S3 API on :9000, console on a random port, creds minioadmin/minioadmin
+  createdb photosheet
+  ```
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # then fill in AUTH_SECRET (openssl rand -base64 32) and DATABASE_URL
+npm run db:deploy             # apply migrations
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Useful scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script               | What it does                    |
+| -------------------- | ------------------------------- |
+| `npm run dev`        | Next.js dev server              |
+| `npm test`           | Unit tests (Vitest)             |
+| `npm run lint`       | ESLint                          |
+| `npm run typecheck`  | TypeScript                      |
+| `npm run format`     | Prettier                        |
+| `npm run db:migrate` | Create/apply a migration in dev |
+| `npm run db:deploy`  | Apply pending migrations        |
+| `npm run db:studio`  | Prisma Studio                   |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Health check
 
-## Learn More
+`GET /api/health` returns `{"status":"ok","db":"ok"}` when the app can reach Postgres.
 
-To learn more about Next.js, take a look at the following resources:
+## Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [`.env.example`](.env.example) for the full list with comments.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployment to Railway is documented as the build progresses (see the Deployment section once the
+Railway step lands).
