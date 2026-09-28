@@ -132,3 +132,23 @@
     @apply font-sans;
   }
 }
+
+/* Contact sheet backgrounds (independent of the app theme). */
+.sheet-light {
+  --sheet-bg: oklch(0.965 0 0);
+  --sheet-hover: oklch(0.92 0 0);
+  --sheet-selected: oklch(0.9 0.04 255);
+  --sheet-caption: oklch(0.35 0 0);
+  --sheet-accent: oklch(0.55 0.2 257);
+  background: var(--sheet-bg);
+  color: oklch(0.2 0 0);
+}
+.sheet-dark {
+  --sheet-bg: oklch(0.17 0 0);
+  --sheet-hover: oklch(0.24 0 0);
+  --sheet-selected: oklch(0.3 0.05 255);
+  --sheet-caption: oklch(0.82 0 0);
+  --sheet-accent: oklch(0.62 0.19 257);
+  background: var(--sheet-bg);
+  color: oklch(0.95 0 0);
+}

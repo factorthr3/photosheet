@@ -32,7 +32,9 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
   there and to `.env.example`.
 - **Validation**: zod v4 for all request bodies and query strings.
 - **Formatting**: Prettier (100 cols) with the Tailwind class-sorting plugin.
-- **Tests**: colocate unit tests as `*.test.ts` next to the code.
+- **Tests**: colocate unit tests as `*.test.ts` next to the code. DB integration tests are
+  `*.int.test.ts` and use `TEST_DATABASE_URL` (falls back to `DATABASE_URL`); fixtures in
+  `src/test/factories.ts`. Test files run serially.
 
 ## Architecture
 
@@ -74,6 +76,20 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - HEIC/HEIF: sharp's prebuilt libvips can't decode HEVC, so `src/lib/image/decode.ts` decodes
   with `heic-decode` (libheif WASM) to raw pixels first. Always open originals via `openImage()`.
 - Originals are never modified.
+
+### Library (contact sheet)
+
+- Filters/sort are defined once in `src/lib/images/filters.ts` (client-safe) and turned into
+  Prisma queries by `src/lib/images/query.ts` (`buildWhere`, keyset `cursorWhere`). Reuse these
+  for anything that acts on "the images matching these filters" (select-all, bulk edit, exports).
+- Pagination is keyset-based with opaque cursors bound to the sort; `query.int.test.ts` proves
+  every sort pages through all rows exactly once (incl. ties and null `takenAt`).
+- `listImages()` (`src/lib/images/list.ts`) backs both the server-rendered first page and
+  `GET /api/o/[slug]/images`.
+- UI: `LibraryView` composes toolbar → `ContactSheet` → `SelectionBar` → `Lightbox`. Filter state
+  and the open image (`?image=`) live in the URL via `history.replaceState/pushState` (no server
+  round-trip). Per-browser view prefs (tile size, sheet background) are in localStorage.
+- Licence warnings: `licenceState()` in `src/lib/images/licence.ts`.
 
 ### Email & audit
 

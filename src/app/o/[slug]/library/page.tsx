@@ -1,40 +1,47 @@
 import type { Metadata } from "next";
-import { type LibraryImage, LibraryClient } from "@/components/library/library-client";
-import { prisma } from "@/lib/db";
+import { LibraryView } from "@/components/library/library-view";
 import { env } from "@/lib/env";
+import { filtersToSearchParams, parseFilters } from "@/lib/images/filters";
+import { listImages, orgPeople, topTags } from "@/lib/images/list";
 import { requireOrg } from "@/lib/org";
 import { can } from "@/lib/permissions";
-import { presignThumb } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "Library" };
 
 export default async function LibraryPage(props: PageProps<"/o/[slug]/library">) {
   const { slug } = await props.params;
   const ctx = await requireOrg(slug, "image:view");
-
-  const rows = await prisma.image.findMany({
-    where: { orgId: ctx.org.id, deletedAt: null, status: { not: "UPLOADING" } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 200,
-    select: { id: true, filename: true, title: true, status: true, thumbKey: true },
-  });
-  const images: LibraryImage[] = await Promise.all(
-    rows.map(async (r) => ({
-      id: r.id,
-      filename: r.filename,
-      title: r.title,
-      status: r.status,
-      thumbUrl: r.thumbKey ? await presignThumb(r.thumbKey) : null,
-    })),
+  const sp = await props.searchParams;
+  const raw = Object.fromEntries(
+    Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
   );
+  let filters;
+  try {
+    filters = parseFilters(raw);
+  } catch {
+    filters = parseFilters({});
+  }
+
+  const [page, tags, people] = await Promise.all([
+    listImages(ctx.org.id, filters),
+    topTags(ctx.org.id),
+    orgPeople(ctx.org.id),
+  ]);
 
   return (
-    <LibraryClient
+    <LibraryView
       slug={slug}
       orgName={ctx.org.name}
       maxUploadMb={env().MAX_UPLOAD_MB}
-      canUpload={can(ctx.role, "image:upload")}
-      images={images}
+      capabilities={{
+        canUpload: can(ctx.role, "image:upload"),
+        canDownload: can(ctx.role, "image:download"),
+        canEdit: can(ctx.role, "image:edit"),
+        canDelete: can(ctx.role, "image:delete:own"),
+        canShare: can(ctx.role, "share:create"),
+      }}
+      facets={{ tags, people }}
+      initial={{ query: filtersToSearchParams(filters).toString(), page }}
     />
   );
 }
