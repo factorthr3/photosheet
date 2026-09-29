@@ -1,3 +1,4 @@
+import "server-only";
 import type { Image } from "@/generated/prisma/client";
 import type { ExifSummary } from "@/lib/image/exif";
 import { presignThumb } from "@/lib/storage";
@@ -73,9 +74,4 @@ export async function toDetail(
     uploader: image.uploader,
     updatedAt: image.updatedAt.toISOString(),
   };
-}
-
-/** Browsers can display these originals directly (others need a converted rendition). */
-export function isBrowserViewable(mimeType: string) {
-  return ["image/jpeg", "image/png", "image/webp"].includes(mimeType);
 }
