@@ -42,3 +42,8 @@ export function claimedMimeType(filename: string, browserType: string): Supporte
   }
   return null;
 }
+
+/** Browsers can display these originals directly (others need a converted rendition). */
+export function isBrowserViewable(mimeType: string) {
+  return ["image/jpeg", "image/png", "image/webp"].includes(mimeType);
+}
