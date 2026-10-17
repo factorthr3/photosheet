@@ -77,14 +77,16 @@ See [`.env.example`](.env.example) for the full list with comments.
 
 PhotoSheet runs as one Railway project, `photosheet`, all in the EU West (Amsterdam) region:
 
-| Resource           | What it runs                            | Key settings                                                                                               |
-| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `web`              | Next.js app (`npm run start`)           | Build `npm run build` · pre-deploy `npm run db:deploy && npm run storage:init` · healthcheck `/api/health` |
-| `worker`           | Background jobs (`npm run worker`)      | Build `npx prisma generate` · restart on failure · 40 s draining for graceful shutdown                     |
-| `Postgres`         | Railway Postgres template               | Reached over the private network (`postgres.railway.internal`)                                             |
-| `photosheet-media` | Railway Bucket (S3-compatible, private) | Region `ams`; accessed only through presigned URLs                                                         |
+| Resource           | What it runs                                          | Key settings                                                                                                               |
+| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `web`              | Next.js app (`next start`)                            | Build `npm run build` · pre-deploy `npm run db:deploy && npm run storage:init` · healthcheck `/api/health` · 15 s draining |
+| `worker`           | Background jobs (`node --import tsx worker/index.ts`) | Build `npx prisma generate` · restart on failure · 40 s draining for graceful shutdown                                     |
+| `Postgres`         | Railway Postgres template                             | Reached over the private network (`postgres.railway.internal`)                                                             |
+| `photosheet-media` | Railway Bucket (S3-compatible, private)               | Region `ams`; accessed only through presigned URLs                                                                         |
 
-Both services deploy automatically on every push to `main` (GitHub source `factorthr3/photosheet`).
+Both services deploy automatically on every push to `main` (GitHub source `factorthr3/photosheet`,
+trigger branch `main`). Start commands call Node directly rather than `npm run …`: npm doesn't pass
+SIGTERM on, so a replaced deployment would be killed mid-request or mid-job instead of draining.
 Migrations run in `web`'s pre-deploy step, so a failing migration stops the deploy before traffic
 moves. The same step sets the bucket's CORS rule for `APP_URL`, which browser uploads need.
 

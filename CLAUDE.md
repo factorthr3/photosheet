@@ -187,6 +187,8 @@ npm run build`. Run `npm run test:e2e` too when a change touches a user journey.
 - `web` pre-deploy runs `npm run db:deploy && npm run storage:init`, so migrations must be
   forward-compatible with the still-running previous release. Healthcheck is `/api/health`.
 - `worker` runs from source via `tsx` (a runtime dependency) and only builds `npx prisma generate`.
+- Railway start commands run Node directly (`node_modules/.bin/next start`,
+  `node --import tsx worker/index.ts`), never `npm run …`, which swallows SIGTERM.
 - `.railway/railway.ts` mirrors the live config (Railway IaC). Variables are managed there: a
   variable missing from that file is **deleted** by `railway config apply`. Run `railway config plan`
   before applying; secrets stay `preserve()`.
