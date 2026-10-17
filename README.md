@@ -40,6 +40,7 @@ npm run worker                # in a second terminal: thumbnails, EXIF, exports
 | ---------------------- | ------------------------------- |
 | `npm run dev`          | Next.js dev server              |
 | `npm test`             | Unit tests (Vitest)             |
+| `npm run test:e2e`     | End-to-end tests (Playwright)   |
 | `npm run lint`         | ESLint                          |
 | `npm run typecheck`    | TypeScript                      |
 | `npm run format`       | Prettier                        |
@@ -48,6 +49,21 @@ npm run worker                # in a second terminal: thumbnails, EXIF, exports
 | `npm run db:studio`    | Prisma Studio                   |
 | `npm run worker`       | Background job worker           |
 | `npm run storage:init` | Create bucket / set CORS        |
+
+### End-to-end tests
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+The suite needs the same Postgres and MinIO as local dev, but never touches your data: it builds
+the app and runs web + worker on port 3100 against its own database (`photosheet_e2e`) and bucket
+(`photosheet-e2e`), and writes emails to `.e2e-outbox/`. It walks the whole journey: sign up,
+create an org, invite an editor, upload JPEGs and a HEIC, build and reorder a board, resize,
+download a ZIP, share with an expiring password-protected link, view it as a guest, check that
+another org can't see anything, and revoke the link. Any browser console error fails a test. CI
+runs it on every pull request.
 
 ### Health check
 
