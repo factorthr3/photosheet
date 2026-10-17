@@ -91,7 +91,7 @@ test("a team can store, organise, resize and share photos — and nobody else ca
     await colleaguePage.getByRole("button", { name: "Create account" }).click();
     await colleaguePage.getByRole("button", { name: "Accept invitation" }).click();
     await colleaguePage.waitForURL(new RegExp(`/o/${slug}/library`));
-    await expect(colleaguePage.getByRole("button", { name: "Upload" })).toBeVisible(); // editors can upload
+    await expect(colleaguePage.getByRole("button", { name: "Upload", exact: true })).toBeVisible(); // editors can upload
     await colleaguePage.context().close();
 
     await page.reload();

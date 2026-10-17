@@ -82,6 +82,11 @@ npm run build`. Run `npm run test:e2e` too when a change touches a user journey.
   POST policies (key, type and max size pinned) → browser POSTs straight to the bucket →
   `POST /uploads/[id]/complete` checks **magic bytes** (`src/lib/image/magic.ts`), sets
   `PROCESSING` and enqueues `process-image`.
+- Folders: a `webkitdirectory` picker and dropped folders (walked via `collectDroppedFiles()` in
+  `src/lib/upload/picked-files.ts`) give `PickedFile`s with relative paths. Inside folders,
+  non-images and hidden files are skipped quietly. When a batch's paths share words
+  (`suggestTagsFromNames()` in `src/lib/images/filename-tags.ts`), the Uploads panel offers an
+  editable tag; it's applied with `bulk-update` once the batch's rows are reserved.
 - `worker/` is a separate process (pg-boss, `src/lib/queue.ts`). `process-image` hashes, reads
   EXIF, and writes 320px/1280px WebP thumbnails, then marks the image `READY` (or `FAILED` after
   retries; `UnprocessableImageError` fails immediately).
