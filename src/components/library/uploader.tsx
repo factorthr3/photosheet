@@ -6,7 +6,9 @@ import {
   ChevronUp,
   CircleAlert,
   Copy,
+  FolderUp,
   Loader2,
+  Tag,
   Upload,
   X,
 } from "lucide-react";
@@ -30,10 +32,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { formatBytes } from "@/lib/format";
 import { claimedMimeType, UPLOAD_ACCEPT } from "@/lib/image/types";
+import { suggestTagsFromNames } from "@/lib/images/filename-tags";
+import { parseTagInput } from "@/lib/images/tags";
+import {
+  collectDroppedFiles,
+  fromFileList,
+  isHiddenPath,
+  type PickedFile,
+} from "@/lib/upload/picked-files";
 import { cn } from "@/lib/utils";
 
 type ItemStatus = "queued" | "hashing" | "uploading" | "processing" | "done" | "failed" | "skipped";
@@ -41,6 +53,8 @@ type ItemStatus = "queued" | "hashing" | "uploading" | "processing" | "done" | "
 interface UploadItem {
   clientId: string;
   name: string;
+  /** Path inside an uploaded folder, or just the name. */
+  path: string;
   size: number;
   status: ItemStatus;
   progress: number;
@@ -52,6 +66,15 @@ interface UploadItem {
 interface DuplicatePrompt {
   items: { clientId: string; name: string; existing: string }[];
   resolve: (uploadAnyway: boolean) => void;
+}
+
+/** "These files all mention …": offered after adding a batch whose names share words. */
+interface TagPrompt {
+  id: string;
+  count: number;
+  suggested: string[];
+  /** Image ids reserved for the batch; resolves once uploads are registered. */
+  imageIds: Promise<string[]>;
 }
 
 const UPLOAD_CONCURRENCY = 3;
@@ -100,8 +123,9 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 interface UploaderContextValue {
-  addFiles: (files: FileList | File[]) => void;
+  addFiles: (files: FileList | File[] | PickedFile[], opts?: { fromFolder?: boolean }) => void;
   openPicker: () => void;
+  openFolderPicker: () => void;
   canUpload: boolean;
 }
 
@@ -136,7 +160,9 @@ export function UploaderProvider({
   const [collapsed, setCollapsed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
+  const [tagPrompts, setTagPrompts] = useState<TagPrompt[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const files = useRef(new Map<string, File>());
   const notifyReady = useEffectEvent((ids: string[]) => onImagesReady?.(ids));
 
@@ -148,7 +174,7 @@ export function UploaderProvider({
   const maxBytes = maxUploadMb * 1024 * 1024;
 
   const runBatch = useCallback(
-    async (batch: UploadItem[]) => {
+    async (batch: UploadItem[], onReserved: (imageIds: string[]) => void) => {
       // 1. Hash (for duplicate detection), de-duplicating within the batch.
       const seen = new Map<string, string>();
       const toCheck: UploadItem[] = [];
@@ -245,6 +271,8 @@ export function UploaderProvider({
         }
       }
 
+      onReserved(Array.from(reserved.values(), (r) => r.imageId));
+
       // 4. Upload with limited concurrency, then confirm each.
       const queue = toUpload.filter((i) => reserved.has(i.clientId));
       const worker = async () => {
@@ -271,19 +299,32 @@ export function UploaderProvider({
   );
 
   const addFiles = useCallback(
-    (list: FileList | File[]) => {
+    (list: FileList | File[] | PickedFile[], opts: { fromFolder?: boolean } = {}) => {
       if (!canUpload) return;
+      const picked = Array.from(list as ArrayLike<File | PickedFile>, (f) =>
+        f instanceof File ? fromFileList([f])[0] : f,
+      );
+      const fromFolder = opts.fromFolder || picked.some((p) => p.path.includes("/"));
       const incoming: UploadItem[] = [];
-      for (const file of Array.from(list)) {
+      let ignored = 0;
+      for (const { file, path } of picked) {
+        const supported = !!claimedMimeType(file.name, file.type);
+        // Folders often hold sidecars, videos and .DS_Store: skip those quietly instead of
+        // listing each one as a failure.
+        if (fromFolder && (!supported || isHiddenPath(path))) {
+          ignored++;
+          continue;
+        }
         const clientId = crypto.randomUUID();
         const item: UploadItem = {
           clientId,
           name: file.name,
+          path,
           size: file.size,
           status: "queued",
           progress: 0,
         };
-        if (!claimedMimeType(file.name, file.type)) {
+        if (!supported) {
           item.status = "failed";
           item.message = "Unsupported file type";
         } else if (file.size > maxBytes) {
@@ -294,10 +335,27 @@ export function UploaderProvider({
         }
         incoming.push(item);
       }
+      if (ignored) {
+        toast.info(
+          `Skipped ${ignored} ${ignored === 1 ? "file that isn't" : "files that aren't"} an image`,
+        );
+      }
       if (!incoming.length) return;
       setItems((prev) => [...prev, ...incoming]);
       setCollapsed(false);
-      void runBatch(incoming.filter((i) => i.status === "queued"));
+
+      const queued = incoming.filter((i) => i.status === "queued");
+      let resolveIds!: (ids: string[]) => void;
+      const imageIds = new Promise<string[]>((resolve) => (resolveIds = resolve));
+      void runBatch(queued, resolveIds).finally(() => resolveIds([]));
+
+      const suggested = suggestTagsFromNames(queued.map((i) => i.path));
+      if (suggested.length) {
+        setTagPrompts((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), count: queued.length, suggested, imageIds },
+        ]);
+      }
     },
     [canUpload, maxBytes, maxUploadMb, runBatch],
   );
@@ -361,7 +419,10 @@ export function UploaderProvider({
       e.preventDefault();
       depth = 0;
       setDragging(false);
-      if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files);
+      if (!e.dataTransfer) return;
+      void collectDroppedFiles(e.dataTransfer).then(({ files, fromFolder }) => {
+        if (files.length) addFiles(files, { fromFolder });
+      });
     };
     window.addEventListener("dragenter", onEnter);
     window.addEventListener("dragleave", onLeave);
@@ -383,15 +444,43 @@ export function UploaderProvider({
   const allSucceeded = items.length > 0 && done === items.length;
 
   // Tidy the panel away shortly after a fully successful batch so it doesn't cover the page
-  // (e.g. the selection bar). Batches with failures or skips stay until closed.
+  // (e.g. the selection bar). Batches with failures or skips, or an unanswered tag suggestion,
+  // stay until closed.
+  const awaitingAnswer = tagPrompts.length > 0;
   useEffect(() => {
-    if (!allSucceeded) return;
+    if (!allSucceeded || awaitingAnswer) return;
     const t = setTimeout(() => setItems([]), 4000);
     return () => clearTimeout(t);
-  }, [allSucceeded]);
+  }, [allSucceeded, awaitingAnswer]);
+
+  const dismissTagPrompt = useCallback(
+    (id: string) => setTagPrompts((prev) => prev.filter((p) => p.id !== id)),
+    [],
+  );
+  const applyTags = useCallback(
+    async (prompt: TagPrompt, tags: string[]) => {
+      const imageIds = await prompt.imageIds;
+      if (imageIds.length === 0) throw new Error("None of these files were uploaded");
+      const { updated } = await api<{ updated: number }>(`${base}/images/bulk-update`, {
+        method: "POST",
+        body: JSON.stringify({ imageIds, addTags: tags }),
+      });
+      dismissTagPrompt(prompt.id);
+      toast.success(
+        `Tagged ${updated} ${updated === 1 ? "image" : "images"} ${tags.map((t) => `“${t}”`).join(", ")}`,
+      );
+      onImagesReady?.(imageIds); // refresh listings so tag filters and details pick it up
+    },
+    [base, dismissTagPrompt, onImagesReady],
+  );
 
   const ctx = useMemo(
-    () => ({ addFiles, openPicker: () => inputRef.current?.click(), canUpload }),
+    () => ({
+      addFiles,
+      openPicker: () => inputRef.current?.click(),
+      openFolderPicker: () => folderInputRef.current?.click(),
+      canUpload,
+    }),
     [addFiles, canUpload],
   );
 
@@ -413,12 +502,27 @@ export function UploaderProvider({
           e.target.value = "";
         }}
       />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        // Folder picker: every file inside, with paths in webkitRelativePath.
+        {...{ webkitdirectory: "" }}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="upload-folder-input"
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files, { fromFolder: true });
+          e.target.value = "";
+        }}
+      />
 
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-primary px-16 py-12 text-center">
             <Upload className="size-10" aria-hidden="true" />
-            <p className="text-lg font-semibold">Drop images to upload</p>
+            <p className="text-lg font-semibold">Drop images or folders to upload</p>
             <p className="text-sm text-muted-foreground">
               to {orgName} · JPEG, PNG, WebP, HEIC, TIFF up to {maxUploadMb} MB
             </p>
@@ -450,18 +554,31 @@ export function UploaderProvider({
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Close uploads"
-                onClick={() => setItems([])}
+                onClick={() => {
+                  setItems([]);
+                  setTagPrompts([]);
+                }}
               >
                 <X />
               </Button>
             )}
           </header>
+          {tagPrompts.map((prompt) => (
+            <TagSuggestion
+              key={prompt.id}
+              prompt={prompt}
+              onApply={(tags) => applyTags(prompt, tags)}
+              onDismiss={() => dismissTagPrompt(prompt.id)}
+            />
+          ))}
           {!collapsed && (
             <ul className="max-h-80 divide-y overflow-y-auto">
               {items.map((item) => (
                 <li key={item.clientId} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{item.name}</p>
+                    <p className="truncate text-sm" title={item.path}>
+                      {item.name}
+                    </p>
                     {item.status === "uploading" ? (
                       <Progress
                         value={item.progress}
@@ -539,13 +656,88 @@ export function UploaderProvider({
   );
 }
 
+function TagSuggestion({
+  prompt,
+  onApply,
+  onDismiss,
+}: {
+  prompt: TagPrompt;
+  onApply: (tags: string[]) => Promise<void>;
+  onDismiss: () => void;
+}) {
+  const [value, setValue] = useState(prompt.suggested.join(", "));
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tags = parseTagInput(value);
+  const quoted = prompt.suggested.map((t) => `“${t}”`).join(" and ");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tags.length) return;
+    setPending(true);
+    setError(null);
+    try {
+      await onApply(tags);
+    } catch (err) {
+      setError((err as Error).message);
+      setPending(false);
+    }
+  }
+
+  return (
+    <form
+      aria-label="Suggested tags"
+      onSubmit={submit}
+      className="space-y-2 border-b bg-muted/40 px-4 py-3"
+    >
+      <p className="flex items-start gap-2 text-sm">
+        <Tag className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span>
+          {prompt.count === 2 ? "Both" : `All ${prompt.count}`} file names mention {quoted}. Tag
+          them?
+        </span>
+      </p>
+      <Input
+        aria-label="Tags to add"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="e.g. launch party, press"
+        disabled={pending}
+      />
+      <p className="text-xs text-muted-foreground">
+        Edit before adding. Separate tags with commas.
+      </p>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onDismiss} disabled={pending}>
+          No thanks
+        </Button>
+        <Button type="submit" size="sm" disabled={pending || tags.length === 0}>
+          {pending && <Loader2 className="animate-spin" />}
+          {tags.length > 1 ? "Add tags" : "Add tag"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function UploadButton() {
-  const { openPicker, canUpload } = useUploader();
+  const { openPicker, openFolderPicker, canUpload } = useUploader();
   if (!canUpload) return null;
   return (
-    <Button onClick={openPicker}>
-      <Upload />
-      Upload
-    </Button>
+    <div className="flex gap-2">
+      <Button variant="outline" onClick={openFolderPicker} aria-label="Upload a folder">
+        <FolderUp />
+        <span className="hidden sm:inline">Folder</span>
+      </Button>
+      <Button onClick={openPicker}>
+        <Upload />
+        Upload
+      </Button>
+    </div>
   );
 }

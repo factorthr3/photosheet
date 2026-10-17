@@ -135,11 +135,18 @@ function EmptyState({
         <p className="font-medium">No images yet</p>
         <p className="text-sm text-muted-foreground">
           {uploader.canUpload
-            ? "Drag photos anywhere on this page, or choose files."
+            ? "Drag photos or folders anywhere on this page, or choose them."
             : "Nothing has been uploaded yet."}
         </p>
       </div>
-      {uploader.canUpload && <Button onClick={uploader.openPicker}>Choose files</Button>}
+      {uploader.canUpload && (
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button onClick={uploader.openPicker}>Choose files</Button>
+          <Button variant="outline" onClick={uploader.openFolderPicker}>
+            Choose a folder
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
