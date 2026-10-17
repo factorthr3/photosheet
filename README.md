@@ -12,7 +12,7 @@ download them.
 
 ### Prerequisites
 
-- Node.js 20.9+ (tested on 25)
+- Node.js 22.19+ or 24.11+ (`.node-version` pins 22 for Railway)
 - PostgreSQL 15+ and an S3-compatible store. On macOS with Homebrew:
 
   ```bash
@@ -57,7 +57,56 @@ npm run worker                # in a second terminal: thumbnails, EXIF, exports
 
 See [`.env.example`](.env.example) for the full list with comments.
 
-## Deployment
+## Deployment (Railway)
 
-Deployment to Railway is documented as the build progresses (see the Deployment section once the
-Railway step lands).
+PhotoSheet runs as one Railway project, `photosheet`, all in the EU West (Amsterdam) region:
+
+| Resource           | What it runs                            | Key settings                                                                                               |
+| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `web`              | Next.js app (`npm run start`)           | Build `npm run build` · pre-deploy `npm run db:deploy && npm run storage:init` · healthcheck `/api/health` |
+| `worker`           | Background jobs (`npm run worker`)      | Build `npx prisma generate` · restart on failure · 40 s draining for graceful shutdown                     |
+| `Postgres`         | Railway Postgres template               | Reached over the private network (`postgres.railway.internal`)                                             |
+| `photosheet-media` | Railway Bucket (S3-compatible, private) | Region `ams`; accessed only through presigned URLs                                                         |
+
+Both services deploy automatically on every push to `main` (GitHub source `factorthr3/photosheet`).
+Migrations run in `web`'s pre-deploy step, so a failing migration stops the deploy before traffic
+moves. The same step sets the bucket's CORS rule for `APP_URL`, which browser uploads need.
+
+The project's configuration is also recorded as code in [`.railway/railway.ts`](.railway/railway.ts)
+(Railway Infrastructure as Code). Preview drift with `railway config plan`; apply deliberate
+changes with `railway config apply`. Secrets are not in that file — it marks them `preserve()`.
+
+### Variables
+
+Set on **both** `web` and `worker` (Railway reference syntax):
+
+| Variable                                    | Value                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                              | `${{Postgres.DATABASE_URL}}`                                                                     |
+| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET`   | `${{photosheet-media.ENDPOINT}}` / `.REGION` / `.BUCKET`                                         |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | `${{photosheet-media.ACCESS_KEY_ID}}` / `.SECRET_ACCESS_KEY`                                     |
+| `S3_FORCE_PATH_STYLE`                       | `false` (Railway Buckets use virtual-hosted URLs)                                                |
+| `AUTH_SECRET`                               | Random, ≥32 chars, identical on both services                                                    |
+| `APP_URL`                                   | `web`: `https://${{RAILWAY_PUBLIC_DOMAIN}}` · `worker`: `https://${{web.RAILWAY_PUBLIC_DOMAIN}}` |
+| `MAX_UPLOAD_MB`                             | `50`                                                                                             |
+| `RESEND_API_KEY`, `EMAIL_FROM`              | Required for email (magic links, invites, resets, shares)                                        |
+
+Railway shared variables can't resolve references to other services, so set the references on each
+service directly.
+
+### Email
+
+Until `RESEND_API_KEY` and a verified `EMAIL_FROM` domain are set, email/password sign-up and
+everything else works, but magic-link sign-in, invitations, password resets and "email this link"
+fail with an error. Admins can still copy an invitation link from the Members page.
+
+### Custom domain
+
+Add it to the `web` service (Settings → Networking, or `railway domain`), create the DNS record
+Railway shows, then redeploy `web` so `APP_URL` picks up the new domain.
+
+### Cost
+
+Usage-billed. At light use expect roughly $8–12/month (web ≈ $3–4, worker ≈ $3–4, Postgres ≈ $2,
+bucket $0.015/GB-month; photo downloads come straight from the bucket and are free). Set a usage
+limit under Workspace → Usage to cap spend.

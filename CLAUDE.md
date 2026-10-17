@@ -170,6 +170,20 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - `recordAudit()` (`src/lib/audit.ts`) appends to `audit_event`. Add new action names to the
   `AuditAction` union.
 
+### Deployment (Railway)
+
+- Project `photosheet`, EU West (Amsterdam): services `web` + `worker`, `Postgres`, Bucket
+  `photosheet-media`. Both services auto-deploy on push to `main`. Live:
+  https://web-production-dedc3.up.railway.app
+- `web` pre-deploy runs `npm run db:deploy && npm run storage:init`, so migrations must be
+  forward-compatible with the still-running previous release. Healthcheck is `/api/health`.
+- `worker` runs from source via `tsx` (a runtime dependency) and only builds `npx prisma generate`.
+- `.railway/railway.ts` mirrors the live config (Railway IaC). Variables are managed there: a
+  variable missing from that file is **deleted** by `railway config apply`. Run `railway config plan`
+  before applying; secrets stay `preserve()`.
+- Railway Buckets use virtual-hosted URLs (`S3_FORCE_PATH_STYLE=false`); MinIO locally uses path
+  style.
+
 ## Security rules
 
 - Every query touching org data must be scoped by `orgId` **and** checked against the caller's
