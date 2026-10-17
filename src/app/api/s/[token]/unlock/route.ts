@@ -29,7 +29,7 @@ export const POST = route(async (req: Request, ctx: RouteContext<"/api/s/[token]
   (await cookies()).set(unlockCookieName(link.id), unlockCookieValue(link), {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: (process.env.APP_URL ?? "").startsWith("https://"),
     path: "/",
     maxAge: UNLOCK_TTL_SECONDS,
   });

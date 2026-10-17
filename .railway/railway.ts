@@ -54,13 +54,16 @@ export default defineRailway(() => {
   const web = service("web", {
     source: repo,
     build: { buildCommand: "npm run build", buildEnvironment: "V3", builder: "RAILPACK" },
-    start: "npm run start",
+    // Start Node directly, not through npm: npm swallows SIGTERM, so the old deployment would be
+    // killed mid-request instead of shutting down cleanly.
+    start: "node_modules/.bin/next start",
     // Migrations + bucket CORS before traffic moves; a failure stops the deploy.
     preDeploy: "npm run db:deploy && npm run storage:init",
     healthcheck: "/api/health",
     healthcheckTimeout: 120,
     replicas: { [REGION]: 1 },
-    deploy: { restartPolicyMaxRetries: 5 },
+    // Time for in-flight requests to finish after SIGTERM.
+    deploy: { drainingSeconds: 15, restartPolicyMaxRetries: 5 },
     env: { ...env, APP_URL: "https://${{RAILWAY_PUBLIC_DOMAIN}}" },
   });
 
@@ -68,7 +71,8 @@ export default defineRailway(() => {
     source: repo,
     // Runs from source with tsx; only the Prisma client needs generating.
     build: { buildCommand: "npx prisma generate", buildEnvironment: "V3", builder: "RAILPACK" },
-    start: "npm run worker",
+    // Same as `npm run worker`, minus npm, so SIGTERM reaches the worker's drain handler.
+    start: "node --import tsx worker/index.ts",
     replicas: { [REGION]: 1 },
     // Time for in-flight jobs to finish after SIGTERM (worker drains for up to 30s).
     deploy: { drainingSeconds: 40 },

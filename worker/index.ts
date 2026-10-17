@@ -3,6 +3,7 @@
  * Runs as its own Railway service from the same repo.
  */
 import "dotenv/config";
+import { createServer } from "node:http";
 import { prisma } from "@/lib/db";
 import {
   type ExportPayload,
@@ -47,6 +48,15 @@ async function main() {
   await boss.schedule(QUEUES.purge, "0 3 * * *", {}, { tz: "UTC" });
 
   console.info(`[worker] started (concurrency ${concurrency})`);
+
+  // Optional liveness endpoint (used by the e2e runner to know the worker is up).
+  const healthPort = Number(process.env.WORKER_HEALTH_PORT);
+  if (healthPort) {
+    createServer((_, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end('{"status":"ok"}');
+    }).listen(healthPort);
+  }
 
   let stopping = false;
   const shutdown = async (signal: string) => {

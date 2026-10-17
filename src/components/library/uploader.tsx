@@ -380,6 +380,16 @@ export function UploaderProvider({
   );
   const done = items.filter((i) => i.status === "done").length;
   const failed = items.filter((i) => i.status === "failed").length;
+  const allSucceeded = items.length > 0 && done === items.length;
+
+  // Tidy the panel away shortly after a fully successful batch so it doesn't cover the page
+  // (e.g. the selection bar). Batches with failures or skips stay until closed.
+  useEffect(() => {
+    if (!allSucceeded) return;
+    const t = setTimeout(() => setItems([]), 4000);
+    return () => clearTimeout(t);
+  }, [allSucceeded]);
+
   const ctx = useMemo(
     () => ({ addFiles, openPicker: () => inputRef.current?.click(), canUpload }),
     [addFiles, canUpload],

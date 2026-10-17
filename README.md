@@ -40,6 +40,7 @@ npm run worker                # in a second terminal: thumbnails, EXIF, exports
 | ---------------------- | ------------------------------- |
 | `npm run dev`          | Next.js dev server              |
 | `npm test`             | Unit tests (Vitest)             |
+| `npm run test:e2e`     | End-to-end tests (Playwright)   |
 | `npm run lint`         | ESLint                          |
 | `npm run typecheck`    | TypeScript                      |
 | `npm run format`       | Prettier                        |
@@ -48,6 +49,21 @@ npm run worker                # in a second terminal: thumbnails, EXIF, exports
 | `npm run db:studio`    | Prisma Studio                   |
 | `npm run worker`       | Background job worker           |
 | `npm run storage:init` | Create bucket / set CORS        |
+
+### End-to-end tests
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+The suite needs the same Postgres and MinIO as local dev, but never touches your data: it builds
+the app and runs web + worker on port 3100 against its own database (`photosheet_e2e`) and bucket
+(`photosheet-e2e`), and writes emails to `.e2e-outbox/`. It walks the whole journey: sign up,
+create an org, invite an editor, upload JPEGs and a HEIC, build and reorder a board, resize,
+download a ZIP, share with an expiring password-protected link, view it as a guest, check that
+another org can't see anything, and revoke the link. Any browser console error fails a test. CI
+runs it on every pull request.
 
 ### Health check
 
@@ -61,14 +77,16 @@ See [`.env.example`](.env.example) for the full list with comments.
 
 PhotoSheet runs as one Railway project, `photosheet`, all in the EU West (Amsterdam) region:
 
-| Resource           | What it runs                            | Key settings                                                                                               |
-| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `web`              | Next.js app (`npm run start`)           | Build `npm run build` · pre-deploy `npm run db:deploy && npm run storage:init` · healthcheck `/api/health` |
-| `worker`           | Background jobs (`npm run worker`)      | Build `npx prisma generate` · restart on failure · 40 s draining for graceful shutdown                     |
-| `Postgres`         | Railway Postgres template               | Reached over the private network (`postgres.railway.internal`)                                             |
-| `photosheet-media` | Railway Bucket (S3-compatible, private) | Region `ams`; accessed only through presigned URLs                                                         |
+| Resource           | What it runs                                          | Key settings                                                                                                               |
+| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `web`              | Next.js app (`next start`)                            | Build `npm run build` · pre-deploy `npm run db:deploy && npm run storage:init` · healthcheck `/api/health` · 15 s draining |
+| `worker`           | Background jobs (`node --import tsx worker/index.ts`) | Build `npx prisma generate` · restart on failure · 40 s draining for graceful shutdown                                     |
+| `Postgres`         | Railway Postgres template                             | Reached over the private network (`postgres.railway.internal`)                                                             |
+| `photosheet-media` | Railway Bucket (S3-compatible, private)               | Region `ams`; accessed only through presigned URLs                                                                         |
 
-Both services deploy automatically on every push to `main` (GitHub source `factorthr3/photosheet`).
+Both services deploy automatically on every push to `main` (GitHub source `factorthr3/photosheet`,
+trigger branch `main`). Start commands call Node directly rather than `npm run …`: npm doesn't pass
+SIGTERM on, so a replaced deployment would be killed mid-request or mid-job instead of draining.
 Migrations run in `web`'s pre-deploy step, so a failing migration stops the deploy before traffic
 moves. The same step sets the bucket's CORS rule for `APP_URL`, which browser uploads need.
 

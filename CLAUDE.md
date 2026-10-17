@@ -11,6 +11,7 @@ See README.md for setup and deployment.
 | --------------------- | ------------------------------------------------------- |
 | Dev server            | `npm run dev` (http://localhost:3000)                   |
 | Unit tests            | `npm test` (Vitest)                                     |
+| End-to-end tests      | `npm run test:e2e` (Playwright; needs Postgres + MinIO) |
 | Lint / types / format | `npm run lint` · `npm run typecheck` · `npm run format` |
 | Create a migration    | `npm run db:migrate -- --name <change>`                 |
 | Apply migrations      | `npm run db:deploy`                                     |
@@ -19,7 +20,8 @@ See README.md for setup and deployment.
 After changing `schema.prisma` restart `npm run dev` — the dev Prisma client is cached on
 `globalThis` and survives hot reloads.
 
-Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run build`.
+Before opening a PR: `npm run lint && npm run typecheck && npm run format:check && npm test &&
+npm run build`. Run `npm run test:e2e` too when a change touches a user journey.
 
 ## Stack & conventions
 
@@ -38,6 +40,13 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - **Tests**: colocate unit tests as `*.test.ts` next to the code. DB integration tests are
   `*.int.test.ts` and use `TEST_DATABASE_URL` (falls back to `DATABASE_URL`); fixtures in
   `src/test/factories.ts`. Test files run serially.
+- **E2E**: Playwright specs in `e2e/`. `e2e/serve.mjs` builds and starts web + worker on port
+  3100 against their own database (`<db>_e2e`) and bucket (`<bucket>-e2e`), so dev data is never
+  touched. Emails land in `.e2e-outbox/` (`EMAIL_OUTBOX_DIR`), read with `waitForEmail()`. Every
+  test fails on browser console errors (`consoleErrors` fixture in `e2e/helpers.ts`). The e2e
+  database persists between runs: make anything unique-keyed unique per run (see `createOrg`).
+  `E2E_SKIP_BUILD=1` reuses the last build when only test code changed. Locally an already
+  running server on :3100 is reused, so stop it after app changes.
 
 ## Architecture
 
@@ -178,6 +187,8 @@ Before opening a PR: `npm run lint && npm run typecheck && npm test && npm run b
 - `web` pre-deploy runs `npm run db:deploy && npm run storage:init`, so migrations must be
   forward-compatible with the still-running previous release. Healthcheck is `/api/health`.
 - `worker` runs from source via `tsx` (a runtime dependency) and only builds `npx prisma generate`.
+- Railway start commands run Node directly (`node_modules/.bin/next start`,
+  `node --import tsx worker/index.ts`), never `npm run …`, which swallows SIGTERM.
 - `.railway/railway.ts` mirrors the live config (Railway IaC). Variables are managed there: a
   variable missing from that file is **deleted** by `railway config apply`. Run `railway config plan`
   before applying; secrets stay `preserve()`.
