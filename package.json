@@ -21,7 +21,8 @@
     "worker": "tsx worker/index.ts",
     "worker:dev": "tsx watch worker/index.ts",
     "storage:init": "tsx scripts/storage-init.ts",
-    "db:seed-images": "tsx scripts/seed-images.ts"
+    "db:seed-images": "tsx scripts/seed-images.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",

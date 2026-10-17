@@ -23,6 +23,8 @@ const envSchema = z.object({
 
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("PhotoSheet <no-reply@photosheet.local>"),
+  /** Write emails as JSON files here instead of sending (e2e tests). Overrides Resend. */
+  EMAIL_OUTBOX_DIR: z.string().optional(),
 
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(50),
 });
