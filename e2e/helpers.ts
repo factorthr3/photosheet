@@ -57,10 +57,15 @@ export async function logIn(page: Page, email: string) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-/** Creates an org from /onboarding and returns its slug. */
+/**
+ * Creates an org from /onboarding and returns its slug. The e2e database outlives a run, so
+ * the slug gets a unique suffix; the display name stays as given.
+ */
 export async function createOrg(page: Page, name: string) {
   await page.goto("/onboarding");
   await page.getByLabel("Organisation name").fill(name);
+  const urlField = page.getByRole("textbox", { name: "URL" });
+  await urlField.fill(`${await urlField.inputValue()}-${Date.now().toString(36)}`);
   await page.getByRole("button", { name: "Create organisation" }).click();
   await page.waitForURL(/\/o\/[^/]+\/library/);
   return new URL(page.url()).pathname.split("/")[2];

@@ -140,7 +140,8 @@ test("a team can store, organise, resize and share photos — and nobody else ca
   });
 
   await test.step("resize one image to a preset and to a custom size, then download", async () => {
-    await tiles(page).first().dblclick();
+    // A 1600 × 1067 JPEG: big enough that neither size is capped at the original.
+    await page.getByRole("button", { name: /^photo-2\b/ }).dblclick();
     await page.getByRole("button", { name: "Resize & download" }).click();
 
     await page.getByRole("radio", { name: /Social square/ }).click();
@@ -169,11 +170,12 @@ test("a team can store, organise, resize and share photos — and nobody else ca
   await test.step("download the whole board as a ZIP at one preset size", async () => {
     await page.goto(boardUrl);
     await page.getByRole("button", { name: "Download ZIP" }).click();
-    await page.getByLabel("Size").click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("combobox", { name: "Size" }).click();
     await page.getByRole("option", { name: /^Web medium/ }).click();
     const [zip] = await Promise.all([
       page.waitForEvent("download", { timeout: 60_000 }),
-      page.getByRole("button", { name: "Create ZIP" }).click(),
+      dialog.getByRole("button", { name: "Create ZIP" }).click(),
     ]);
     const entries = zipEntries(await save(zip, downloads));
     expect(entries).toHaveLength(7);
@@ -209,7 +211,7 @@ test("a team can store, organise, resize and share photos — and nobody else ca
     await expect(guest.getByText("Enter the password to view them.")).toBeVisible();
     await guest.getByLabel("Password").fill("wrong-password");
     await guest.getByRole("button", { name: "View photos" }).click();
-    await expect(guest.getByRole("alert")).toContainText("That password isn't right");
+    await expect(guest.getByText("That password isn't right")).toBeVisible();
     await guest.getByLabel("Password").fill("press-kit-42");
     await guest.getByRole("button", { name: "View photos" }).click();
 
@@ -228,7 +230,8 @@ test("a team can store, organise, resize and share photos — and nobody else ca
     ]);
     const meta = await sharp(await save(one, downloads)).metadata();
     expect(Math.max(meta.width!, meta.height!)).toBeLessThanOrEqual(1200);
-    await guest.keyboard.press("Escape");
+    await guest.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+    await expect(guest.getByRole("dialog")).toBeHidden();
 
     await guest.getByRole("button", { name: "Download all (7)" }).click();
     const [all] = await Promise.all([
